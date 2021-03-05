@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -51,6 +52,16 @@ func MustGetStringExpanded(cmd *cobra.Command, key string) string {
 // was not present.
 func MustGetBool(cmd *cobra.Command, key string) bool {
 	value, err := cmd.Flags().GetBool(key)
+	if err != nil {
+		panic("failed to find cobra flag: " + key)
+	}
+	return value
+}
+
+// MustGetDuration reads a duration value out of a Cobra flag and panics if that
+// key was not present.
+func MustGetDuration(cmd *cobra.Command, key string) time.Duration {
+	value, err := cmd.Flags().GetDuration(key)
 	if err != nil {
 		panic("failed to find cobra flag: " + key)
 	}
