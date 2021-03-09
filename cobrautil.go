@@ -2,9 +2,7 @@ package cobrautil
 
 import (
 	"fmt"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -32,40 +30,4 @@ func SyncViperPreRunE(prefix string) func(cmd *cobra.Command, args []string) err
 
 		return nil
 	}
-}
-
-// MustGetString reads a string value out of a Cobra flag and panics if that key
-// was not present.
-func MustGetString(cmd *cobra.Command, key string) string {
-	value, err := cmd.Flags().GetString(key)
-	if err != nil {
-		panic("failed to find cobra flag: " + key)
-	}
-	return value
-}
-
-// MustGetExpandedString calls MustGetString and expands any environment
-// variables present in the string.
-func MustGetStringExpanded(cmd *cobra.Command, key string) string {
-	return os.ExpandEnv(MustGetString(cmd, key))
-}
-
-// MustGetBool reads a boolean value out of a Cobra flag and panics if that key
-// was not present.
-func MustGetBool(cmd *cobra.Command, key string) bool {
-	value, err := cmd.Flags().GetBool(key)
-	if err != nil {
-		panic("failed to find cobra flag: " + key)
-	}
-	return value
-}
-
-// MustGetDuration reads a duration value out of a Cobra flag and panics if that
-// key was not present.
-func MustGetDuration(cmd *cobra.Command, key string) time.Duration {
-	value, err := cmd.Flags().GetDuration(key)
-	if err != nil {
-		panic("failed to find cobra flag: " + key)
-	}
-	return value
 }
