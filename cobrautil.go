@@ -13,6 +13,8 @@ import (
 
 // SyncViperPreRunE returns a Cobra run func that synchronizes Viper environment
 // flags prefixed with the provided argument.
+//
+// Thanks to Carolyn Van Slyck: https://github.com/carolynvs/stingoftheviper
 func SyncViperPreRunE(prefix string) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		v := viper.New()
