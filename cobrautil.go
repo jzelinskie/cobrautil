@@ -14,6 +14,7 @@ import (
 //
 // Thanks to Carolyn Van Slyck: https://github.com/carolynvs/stingoftheviper
 func SyncViperPreRunE(prefix string) func(cmd *cobra.Command, args []string) error {
+	prefix = strings.ToUpper(prefix)
 	return func(cmd *cobra.Command, args []string) error {
 		v := viper.New()
 		viper.SetEnvPrefix(prefix)
