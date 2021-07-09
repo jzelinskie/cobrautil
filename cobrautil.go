@@ -81,6 +81,6 @@ func ZeroLogPreRunE(cmd *cobra.Command, args []string) error {
 		log.Fatal().Str("level", level).Msg("unknown log level")
 	}
 
-	log.Info().Str("new level", level).Msg("set log level")
+	log.Debug().Str("new level", level).Msg("set log level")
 	return nil
 }
