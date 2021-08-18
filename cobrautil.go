@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jzelinskie/stringz"
 	"github.com/mattn/go-isatty"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
@@ -26,6 +27,15 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+func IsBuiltinCommand(cmd *cobra.Command) bool {
+	return stringz.SliceContains([]string{
+		"help [command]",
+		"completion [command]",
+	},
+		cmd.Use,
+	)
+}
+
 // SyncViperPreRunE returns a Cobra run func that synchronizes Viper environment
 // flags prefixed with the provided argument.
 //
@@ -33,8 +43,8 @@ import (
 func SyncViperPreRunE(prefix string) func(cmd *cobra.Command, args []string) error {
 	prefix = strings.ReplaceAll(strings.ToUpper(prefix), "-", "_")
 	return func(cmd *cobra.Command, args []string) error {
-		if cmd.Use == "help [command]" {
-			return nil // No-op the help command
+		if IsBuiltinCommand(cmd) {
+			return nil // No-op for builtins
 		}
 
 		v := viper.New()
@@ -81,8 +91,8 @@ func RegisterZeroLogFlags(flags *pflag.FlagSet) {
 //
 // This function exits with log.Fatal on failure.
 func ZeroLogPreRunE(cmd *cobra.Command, args []string) error {
-	if cmd.Use == "help [command]" {
-		return nil // No-op the help command
+	if IsBuiltinCommand(cmd) {
+		return nil // No-op for builtins
 	}
 
 	format := MustGetString(cmd, "log-format")
@@ -129,8 +139,8 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, serviceName string) {
 // corresponding tracing provider. The required flags can be added to a command
 // by using RegisterTracingPersistentFlags().
 func OpenTelemetryPreRunE(cmd *cobra.Command, args []string) error {
-	if cmd.Use == "help [command]" {
-		return nil // No-op the help command
+	if IsBuiltinCommand(cmd) {
+		return nil // No-op for builtins
 	}
 
 	provider := strings.ToLower(MustGetString(cmd, "otel-provider"))
