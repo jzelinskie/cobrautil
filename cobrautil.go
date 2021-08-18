@@ -9,6 +9,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 // SyncViperPreRunE returns a Cobra run func that synchronizes Viper environment
@@ -78,9 +84,63 @@ func ZeroLogPreRunE(cmd *cobra.Command, args []string) error {
 	case "panic":
 		zerolog.SetGlobalLevel(zerolog.PanicLevel)
 	default:
-		log.Fatal().Str("level", level).Msg("unknown log level")
+		return fmt.Errorf("unknown log level: %s", level)
 	}
 
-	log.Debug().Str("new level", level).Msg("set log level")
+	log.Info().Str("new level", level).Msg("set log level")
+	return nil
+}
+
+// RegisterOpenTelemetryFlags adds the following flags for use with
+// OpenTelemetryPreRunE:
+// - "otel-provider"
+// - "otel-jaeger-endpoint"
+// - "otel-jaeger-service-name"
+func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, serviceName string) {
+	flags.String("otel-provider", "none", "opentelemetry provider for tracing (none, jaeger)")
+	flags.String("otel-jaeger-endpoint", "http://jaeger:14268/api/traces", "jaeger collector endpoint")
+	flags.String("otel-jaeger-service-name", serviceName, "jaeger service name for trace data")
+}
+
+// TracingPreRun reads the provided command's flags and configures the
+// corresponding tracing provider. The required flags can be added to a command
+// by using RegisterTracingPersistentFlags().
+func OpenTelemetryPreRunE(cmd *cobra.Command, args []string) error {
+	provider := strings.ToLower(MustGetString(cmd, "otel-provider"))
+	switch provider {
+	case "none":
+		// Nothing.
+	case "jaeger":
+		return initJaegerTracer(
+			MustGetString(cmd, "otel-jaeger-endpoint"),
+			MustGetString(cmd, "otel-jaeger-service-name"),
+		)
+	default:
+		return fmt.Errorf("unknown tracing provider: %s", provider)
+	}
+
+	log.Info().Str("new provider", provider).Msg("set tracing provider")
+	return nil
+}
+
+func initJaegerTracer(endpoint, serviceName string) error {
+	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
+	if err != nil {
+		return err
+	}
+
+	// Configure the global tracer as a batched, always sampling Jaeger exporter.
+	otel.SetTracerProvider(trace.NewTracerProvider(
+		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exp)),
+		trace.WithResource(resource.NewSchemaless(semconv.ServiceNameKey.String(serviceName))),
+	))
+
+	// Configure the global tracer to use the W3C method for propagating contexts
+	// across services.
+	//
+	// For low-level details see:
+	// https://www.w3.org/TR/trace-context/
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	return nil
 }
