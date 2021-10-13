@@ -264,6 +264,16 @@ func MustGetStringSlice(cmd *cobra.Command, name string) []string {
 	return value
 }
 
+// MustGetStringSlice returns the []string value of a flag with the given name,
+// calls os.ExpandEnv on values, and panics if that flag was never defined.
+func MustGetStringSliceExpanded(cmd *cobra.Command, name string) []string {
+	slice := MustGetStringSlice(cmd, name)
+	for i, str := range slice {
+		slice[i] = os.ExpandEnv(str)
+	}
+	return slice
+}
+
 // MustGetStringToInt returns the map[string]int value of a flag with the given
 // name and panics if that flag was never defined.
 func MustGetStringToInt(cmd *cobra.Command, name string) map[string]int {
