@@ -2,8 +2,8 @@ package cobrautil
 
 import (
 	"fmt"
+	"net"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/jzelinskie/stringz"
 	"github.com/mattn/go-isatty"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -207,7 +206,7 @@ func initJaegerTracer(endpoint, serviceName string) error {
 // - "$PREFIX-cert-path"
 // - "$PREFIX-key-path"
 // - "$PREFIX-max-conn-age"
-func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string) {
+func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
 	serviceName = stringz.DefaultEmpty(serviceName, "grpc")
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":50051")
@@ -215,8 +214,8 @@ func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 	flags.String(flagPrefix+"-addr", defaultAddr, "address to listen on to serve "+serviceName)
 	flags.String(flagPrefix+"-cert-path", "", "local path to the TLS certificate used to serve "+serviceName)
 	flags.String(flagPrefix+"-key-path", "", "local path to the TLS key used to serve "+serviceName)
-	flags.Bool(flagPrefix+"-no-tls", false, "serve unencrypted "+flagPrefix+" gRPC services")
 	flags.Duration(flagPrefix+"-max-conn-age", 30*time.Second, "how long a connection serving "+serviceName+" should be able to live")
+	flags.Bool(flagPrefix+"-enabled", defaultEnabled, "enable "+serviceName+" gRPC server")
 }
 
 // GrpcServerFromFlags creates an *grpc.Server as configured by the flags from
@@ -227,28 +226,47 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 		MaxConnectionAge: MustGetDuration(cmd, flagPrefix+"-max-conn-age"),
 	}))
 
-	if MustGetBool(cmd, flagPrefix+"-no-tls") {
-		return grpc.NewServer(opts...), nil
-	}
-
 	certPath := MustGetStringExpanded(cmd, flagPrefix+"-cert-path")
 	keyPath := MustGetStringExpanded(cmd, flagPrefix+"-key-path")
-	if certPath == "" || keyPath == "" {
+
+	switch {
+	case certPath == "" && keyPath == "":
+		log.Warn().Str("prefix", flagPrefix).Msg("grpc server serving plaintext")
+		return grpc.NewServer(opts...), nil
+	case certPath != "" && keyPath != "":
+		creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, grpc.Creds(creds))
+		return grpc.NewServer(opts...), nil
+	default:
 		return nil, fmt.Errorf(
-			"failed to start gRPC server: must provide either --%s-no-tls or --%s-cert-path and --%s-key-path",
-			flagPrefix,
+			"failed to start gRPC server: must provide both --%s-cert-path and --%s-key-path",
 			flagPrefix,
 			flagPrefix,
 		)
 	}
+}
 
-	creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
+// GrpcListenFromFlags listens on an gRPC server using the configuration stored
+// in the cobra command that was registered with RegisterGrpcServerFlags.
+func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server) error {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
+
+	addr := MustGetStringExpanded(cmd, flagPrefix+"-addr")
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to listen on addr for gRPC server: %w", err)
 	}
-	opts = append(opts, grpc.Creds(creds))
 
-	return grpc.NewServer(opts...), nil
+	if MustGetBool(cmd, flagPrefix+"-enabled") {
+		err = srv.Serve(l)
+		if err != nil {
+			return fmt.Errorf("failed to serve gRPC: %w", err)
+		}
+	}
+	return nil
 }
 
 // RegisterHttpServerFlags adds the following flags for use with
@@ -258,7 +276,7 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 // - "$PREFIX-cert-path"
 // - "$PREFIX-key-path"
 // - "$PREFIX-enabled"
-func RegisterHttpServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string) {
+func RegisterHttpServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
 	serviceName = stringz.DefaultEmpty(serviceName, "http")
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":8443")
@@ -266,8 +284,7 @@ func RegisterHttpServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 	flags.String(flagPrefix+"-addr", defaultAddr, "address to listen on to serve "+serviceName)
 	flags.String(flagPrefix+"-cert-path", "", "local path to the TLS certificate used to serve "+serviceName)
 	flags.String(flagPrefix+"-key-path", "", "local path to the TLS key used to serve "+serviceName)
-	flags.Bool(flagPrefix+"-enabled", true, "enable "+serviceName+" http server")
-	flags.Bool(flagPrefix+"-no-tls", false, "serve "+serviceName+" unencrypted")
+	flags.Bool(flagPrefix+"-enabled", defaultEnabled, "enable "+serviceName+" http server")
 }
 
 // HttpServerFromFlags creates an *http.Server as configured by the flags from
@@ -286,50 +303,25 @@ func HttpListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server
 		return nil
 	}
 
-	if MustGetBool(cmd, flagPrefix+"-no-tls") {
+	certPath := MustGetStringExpanded(cmd, flagPrefix+"-cert-path")
+	keyPath := MustGetStringExpanded(cmd, flagPrefix+"-key-path")
+
+	switch {
+	case certPath == "" && keyPath == "":
+		log.Warn().Str("prefix", flagPrefix).Msg("http server serving plaintext")
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			return fmt.Errorf("failed while serving http: %w", err)
 		}
-	} else {
-		certPath := MustGetStringExpanded(cmd, flagPrefix+"-cert-path")
-		keyPath := MustGetStringExpanded(cmd, flagPrefix+"-key-path")
-		if certPath == "" || keyPath == "" {
-			return fmt.Errorf("failed to start http server: must provide either -%s-no-tls or --%s-cert-path and --%s-key-path",
-				flagPrefix,
-				flagPrefix,
-				flagPrefix,
-			)
-		}
-
+		return nil
+	case certPath != "" && keyPath != "":
 		if err := srv.ListenAndServeTLS(certPath, keyPath); err != http.ErrServerClosed {
 			return fmt.Errorf("failed while serving https: %w", err)
 		}
-	}
-	return nil
-}
-
-// RegisterMetricsServerFlags adds the following flags for use with
-// MetricsServerFromFlags.
-func RegisterMetricsServerFlags(flags *pflag.FlagSet, prefix string) {
-	flags.String(prefix+"-addr", ":9090", "address on which to serve metrics and runtime profiles")
-}
-
-// MetricsServerFromFlags creates an *http.Server that serves a Prometheus
-// handler and pprof endpoint as configured by the cobra flags.
-//
-// The required flags can be added to a command by using
-// RegisterMetricsServerFlags().
-func MetricsServerFromFlags(cmd *cobra.Command, prefix string) *http.Server {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-
-	return &http.Server{
-		Addr:    MustGetString(cmd, prefix+"-addr"),
-		Handler: mux,
+		return nil
+	default:
+		return fmt.Errorf("failed to start http server: must provide both --%s-cert-path and --%s-key-path",
+			flagPrefix,
+			flagPrefix,
+		)
 	}
 }
