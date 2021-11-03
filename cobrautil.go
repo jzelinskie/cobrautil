@@ -253,18 +253,20 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server) error {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
 
+	if !MustGetBool(cmd, flagPrefix+"-enabled") {
+		return nil
+	}
+
 	addr := MustGetStringExpanded(cmd, flagPrefix+"-addr")
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on addr for gRPC server: %w", err)
 	}
 
-	if MustGetBool(cmd, flagPrefix+"-enabled") {
-		err = srv.Serve(l)
-		if err != nil {
-			return fmt.Errorf("failed to serve gRPC: %w", err)
-		}
+	if err := srv.Serve(l); err != nil {
+		return fmt.Errorf("failed to serve gRPC: %w", err)
 	}
+
 	return nil
 }
 
@@ -297,7 +299,7 @@ func HttpServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
 // HttpListenFromFlags listens on an HTTP server using the configuration stored
 // in the cobra command that was registered with RegisterHttpServerFlags.
 func HttpListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server) error {
-	if MustGetBool(cmd, flagPrefix+"-enabled") {
+	if !MustGetBool(cmd, flagPrefix+"-enabled") {
 		return nil
 	}
 
