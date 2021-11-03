@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -27,6 +28,8 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+// IsBuiltinCommand checks against a hard-coded list of the names of commands
+// that cobra provides out-of-the-box.
 func IsBuiltinCommand(cmd *cobra.Command) bool {
 	return stringz.SliceContains([]string{
 		"help [command]",
@@ -52,11 +55,11 @@ func SyncViperPreRunE(prefix string) func(cmd *cobra.Command, args []string) err
 
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
 			suffix := strings.ToUpper(strings.ReplaceAll(f.Name, "-", "_"))
-			v.BindEnv(f.Name, prefix+"_"+suffix)
+			_ = v.BindEnv(f.Name, prefix+"_"+suffix)
 
 			if !f.Changed && v.IsSet(f.Name) {
 				val := v.Get(f.Name)
-				cmd.Flags().Set(f.Name, fmt.Sprintf("%v", val))
+				_ = cmd.Flags().Set(f.Name, fmt.Sprintf("%v", val))
 			}
 		})
 
@@ -79,85 +82,100 @@ func CommandStack(cmdfns ...CobraRunFunc) CobraRunFunc {
 	}
 }
 
-// RegisterZeroLogFlags adds a "log-level" flag for use in with ZeroLogPreRunE.
-func RegisterZeroLogFlags(flags *pflag.FlagSet) {
-	flags.String("log-level", "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
-	flags.String("log-format", "auto", `format of logs ("auto", "human", "json")`)
+// RegisterZeroLogFlags adds flags for use in with ZeroLogPreRunE:
+// - "$PREFIX-level"
+// - "$PREFIX-format"
+func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "log")
+	flags.String(flagPrefix+"-level", "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
+	flags.String(flagPrefix+"-format", "auto", `format of logs ("auto", "human", "json")`)
 }
 
-// ZeroLogPreRunE reads the provided command's flags and configures the
-// corresponding log level. The required flags can be added to a command by
-// using RegisterLoggingPersistentFlags().
+// ZeroLogPreRunE returns a Cobra run func that configures the corresponding
+// log level from a command.
 //
-// This function exits with log.Fatal on failure.
-func ZeroLogPreRunE(cmd *cobra.Command, args []string) error {
-	if IsBuiltinCommand(cmd) {
-		return nil // No-op for builtins
-	}
+// The required flags can be added to a command by using
+// RegisterLoggingPersistentFlags().
+func ZeroLogPreRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "log")
+	return func(cmd *cobra.Command, args []string) error {
+		if IsBuiltinCommand(cmd) {
+			return nil // No-op for builtins
+		}
 
-	format := MustGetString(cmd, "log-format")
-	if format == "human" || (format == "auto" && isatty.IsTerminal(os.Stdout.Fd())) {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
-	}
+		format := MustGetString(cmd, flagPrefix+"-format")
+		if format == "human" || (format == "auto" && isatty.IsTerminal(os.Stdout.Fd())) {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+		}
 
-	level := strings.ToLower(MustGetString(cmd, "log-level"))
-	switch level {
-	case "trace":
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	case "debug":
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	case "info":
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	case "warn":
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	case "error":
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	case "fatal":
-		zerolog.SetGlobalLevel(zerolog.FatalLevel)
-	case "panic":
-		zerolog.SetGlobalLevel(zerolog.PanicLevel)
-	default:
-		return fmt.Errorf("unknown log level: %s", level)
-	}
+		level := strings.ToLower(MustGetString(cmd, flagPrefix+"-level"))
+		switch level {
+		case "trace":
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
+		case "debug":
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		case "info":
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		case "warn":
+			zerolog.SetGlobalLevel(zerolog.WarnLevel)
+		case "error":
+			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+		case "fatal":
+			zerolog.SetGlobalLevel(zerolog.FatalLevel)
+		case "panic":
+			zerolog.SetGlobalLevel(zerolog.PanicLevel)
+		default:
+			return fmt.Errorf("unknown log level: %s", level)
+		}
 
-	log.Info().Str("new level", level).Msg("set log level")
-	return nil
+		log.WithLevel(prerunLevel).Str("new level", level).Msg("set log level")
+		return nil
+	}
 }
 
 // RegisterOpenTelemetryFlags adds the following flags for use with
 // OpenTelemetryPreRunE:
-// - "otel-provider"
-// - "otel-jaeger-endpoint"
-// - "otel-jaeger-service-name"
-func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, serviceName string) {
-	flags.String("otel-provider", "none", `opentelemetry provider for tracing ("none", "jaeger")`)
-	flags.String("otel-jaeger-endpoint", "http://jaeger:14268/api/traces", "jaeger collector endpoint")
-	flags.String("otel-jaeger-service-name", serviceName, "jaeger service name for trace data")
+// - "$PREFIX-provider"
+// - "$PREFIX-jaeger-endpoint"
+// - "$PREFIX-jaeger-service-name"
+func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName string) {
+	bi, _ := debug.ReadBuildInfo()
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "otel")
+	serviceName = stringz.DefaultEmpty(serviceName, bi.Main.Path)
+
+	flags.String(flagPrefix+"-provider", "none", `opentelemetry provider for tracing ("none", "jaeger")`)
+	flags.String(flagPrefix+"-jaeger-endpoint", "http://jaeger:14268/api/traces", "jaeger collector endpoint")
+	flags.String(flagPrefix+"-jaeger-service-name", serviceName, "jaeger service name for trace data")
 }
 
-// TracingPreRun reads the provided command's flags and configures the
-// corresponding tracing provider. The required flags can be added to a command
-// by using RegisterTracingPersistentFlags().
-func OpenTelemetryPreRunE(cmd *cobra.Command, args []string) error {
-	if IsBuiltinCommand(cmd) {
-		return nil // No-op for builtins
-	}
+// OpenTelemetryPreRunE returns a Cobra run func that configures the
+// corresponding otel provider from a command.
+//
+// The required flags can be added to a command by using
+// RegisterOpenTelemetryFlags().
+func OpenTelemetryPreRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "otel")
+	return func(cmd *cobra.Command, args []string) error {
+		if IsBuiltinCommand(cmd) {
+			return nil // No-op for builtins
+		}
 
-	provider := strings.ToLower(MustGetString(cmd, "otel-provider"))
-	switch provider {
-	case "none":
-		// Nothing.
-	case "jaeger":
-		return initJaegerTracer(
-			MustGetString(cmd, "otel-jaeger-endpoint"),
-			MustGetString(cmd, "otel-jaeger-service-name"),
-		)
-	default:
-		return fmt.Errorf("unknown tracing provider: %s", provider)
-	}
+		provider := strings.ToLower(MustGetString(cmd, flagPrefix+"-provider"))
+		switch provider {
+		case "none":
+			// Nothing.
+		case "jaeger":
+			return initJaegerTracer(
+				MustGetString(cmd, flagPrefix+"-jaeger-endpoint"),
+				MustGetString(cmd, flagPrefix+"-jaeger-service-name"),
+			)
+		default:
+			return fmt.Errorf("unknown tracing provider: %s", provider)
+		}
 
-	log.Info().Str("new provider", provider).Msg("set tracing provider")
-	return nil
+		log.WithLevel(prerunLevel).Str("new provider", provider).Msg("set tracing provider")
+		return nil
+	}
 }
 
 func initJaegerTracer(endpoint, serviceName string) error {
@@ -184,32 +202,44 @@ func initJaegerTracer(endpoint, serviceName string) error {
 
 // RegisterGrpcServerFlags adds the following flags for use with
 // GrpcServerFromFlags:
-// - "grpc-addr"
-// - "grpc-no-tls"
-// - "grpc-cert-path"
-// - "grpc-key-path"
-// - "grpc-max-conn-age"
-func RegisterGrpcServerFlags(flags *pflag.FlagSet) {
-	flags.String("grpc-addr", ":50051", "address to listen on for serving gRPC services")
-	flags.String("grpc-cert-path", "", "local path to the TLS certificate used to serve gRPC services")
-	flags.String("grpc-key-path", "", "local path to the TLS key used to serve gRPC services")
-	flags.Bool("grpc-no-tls", false, "serve unencrypted gRPC services")
-	flags.Duration("grpc-max-conn-age", 30*time.Second, "how long a connection should be able to live")
+// - "$PREFIX-addr"
+// - "$PREFIX-no-tls"
+// - "$PREFIX-cert-path"
+// - "$PREFIX-key-path"
+// - "$PREFIX-max-conn-age"
+func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string) {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
+	serviceName = stringz.DefaultEmpty(serviceName, "grpc")
+	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":50051")
+
+	flags.String(flagPrefix+"-addr", defaultAddr, "address to listen on to serve "+serviceName)
+	flags.String(flagPrefix+"-cert-path", "", "local path to the TLS certificate used to serve "+serviceName)
+	flags.String(flagPrefix+"-key-path", "", "local path to the TLS key used to serve "+serviceName)
+	flags.Bool(flagPrefix+"-no-tls", false, "serve unencrypted "+flagPrefix+" gRPC services")
+	flags.Duration(flagPrefix+"-max-conn-age", 30*time.Second, "how long a connection serving "+serviceName+" should be able to live")
 }
 
-func GrpcServerFromFlags(cmd *cobra.Command, opts ...grpc.ServerOption) (*grpc.Server, error) {
+// GrpcServerFromFlags creates an *grpc.Server as configured by the flags from
+// RegisterGrpcServerFlags().
+func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.ServerOption) (*grpc.Server, error) {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
-		MaxConnectionAge: MustGetDuration(cmd, "grpc-max-conn-age"),
+		MaxConnectionAge: MustGetDuration(cmd, flagPrefix+"-max-conn-age"),
 	}))
 
-	if MustGetBool(cmd, "grpc-no-tls") {
+	if MustGetBool(cmd, flagPrefix+"-no-tls") {
 		return grpc.NewServer(opts...), nil
 	}
 
-	certPath := MustGetStringExpanded(cmd, "grpc-cert-path")
-	keyPath := MustGetStringExpanded(cmd, "grpc-key-path")
+	certPath := MustGetStringExpanded(cmd, flagPrefix+"-cert-path")
+	keyPath := MustGetStringExpanded(cmd, flagPrefix+"-key-path")
 	if certPath == "" || keyPath == "" {
-		return nil, fmt.Errorf("failed to start gRPC server: must provide either --grpc-no-tls or --grpc-cert-path and --grpc-key-path")
+		return nil, fmt.Errorf(
+			"failed to start gRPC server: must provide either --%s-no-tls or --%s-cert-path and --%s-key-path",
+			flagPrefix,
+			flagPrefix,
+			flagPrefix,
+		)
 	}
 
 	creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
@@ -221,11 +251,75 @@ func GrpcServerFromFlags(cmd *cobra.Command, opts ...grpc.ServerOption) (*grpc.S
 	return grpc.NewServer(opts...), nil
 }
 
-func RegisterMetricsServerFlags(flags *pflag.FlagSet) {
-	flags.String("metrics-addr", ":9090", "address on which to serve metrics and runtime profiles")
+// RegisterHttpServerFlags adds the following flags for use with
+// HttpServerFromFlags:
+// - "$PREFIX-addr"
+// - "$PREFIX-no-tls"
+// - "$PREFIX-cert-path"
+// - "$PREFIX-key-path"
+// - "$PREFIX-enabled"
+func RegisterHttpServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string) {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
+	serviceName = stringz.DefaultEmpty(serviceName, "http")
+	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":8443")
+
+	flags.String(flagPrefix+"-addr", defaultAddr, "address to listen on to serve "+serviceName)
+	flags.String(flagPrefix+"-cert-path", "", "local path to the TLS certificate used to serve "+serviceName)
+	flags.String(flagPrefix+"-key-path", "", "local path to the TLS key used to serve "+serviceName)
+	flags.Bool(flagPrefix+"-enabled", true, "enable "+serviceName+" http server")
+	flags.Bool(flagPrefix+"-no-tls", false, "serve "+serviceName+" unencrypted")
 }
 
-func MetricsServerFromFlags(cmd *cobra.Command) *http.Server {
+// HttpServerFromFlags creates an *http.Server as configured by the flags from
+// RegisterGrpcServerFlags().
+func HttpServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
+	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
+	return &http.Server{
+		Addr: MustGetStringExpanded(cmd, flagPrefix+"-addr"),
+	}
+}
+
+// HttpListenFromFlags listens on an HTTP server using the configuration stored
+// in the cobra command that was registered with RegisterHttpServerFlags.
+func HttpListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server) error {
+	if MustGetBool(cmd, flagPrefix+"-enabled") {
+		return nil
+	}
+
+	if MustGetBool(cmd, flagPrefix+"-no-tls") {
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			return fmt.Errorf("failed while serving http: %w", err)
+		}
+	} else {
+		certPath := MustGetStringExpanded(cmd, flagPrefix+"-cert-path")
+		keyPath := MustGetStringExpanded(cmd, flagPrefix+"-key-path")
+		if certPath == "" || keyPath == "" {
+			return fmt.Errorf("failed to start http server: must provide either -%s-no-tls or --%s-cert-path and --%s-key-path",
+				flagPrefix,
+				flagPrefix,
+				flagPrefix,
+			)
+		}
+
+		if err := srv.ListenAndServeTLS(certPath, keyPath); err != http.ErrServerClosed {
+			return fmt.Errorf("failed while serving https: %w", err)
+		}
+	}
+	return nil
+}
+
+// RegisterMetricsServerFlags adds the following flags for use with
+// MetricsServerFromFlags.
+func RegisterMetricsServerFlags(flags *pflag.FlagSet, prefix string) {
+	flags.String(prefix+"-addr", ":9090", "address on which to serve metrics and runtime profiles")
+}
+
+// MetricsServerFromFlags creates an *http.Server that serves a Prometheus
+// handler and pprof endpoint as configured by the cobra flags.
+//
+// The required flags can be added to a command by using
+// RegisterMetricsServerFlags().
+func MetricsServerFromFlags(cmd *cobra.Command, prefix string) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -235,7 +329,7 @@ func MetricsServerFromFlags(cmd *cobra.Command) *http.Server {
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	return &http.Server{
-		Addr:    MustGetString(cmd, "metrics-addr"),
+		Addr:    MustGetString(cmd, prefix+"-addr"),
 		Handler: mux,
 	}
 }

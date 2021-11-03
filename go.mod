@@ -3,6 +3,7 @@ module github.com/jzelinskie/cobrautil
 go 1.16
 
 require (
+	github.com/jzelinskie/stringz v0.0.1
 	github.com/mattn/go-isatty v0.0.3
 	github.com/prometheus/client_golang v0.9.3
 	github.com/rs/zerolog v1.23.0
