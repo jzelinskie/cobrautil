@@ -211,6 +211,7 @@ func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":50051")
 
 	flags.String(flagPrefix+"-addr", defaultAddr, "address to listen on to serve "+serviceName)
+	flags.String(flagPrefix+"-network", "tcp", "network type to serve "+serviceName+` ("tcp", "tcp4", "tcp6", "unix", "unixpacket")`)
 	flags.String(flagPrefix+"-tls-cert-path", "", "local path to the TLS certificate used to serve "+serviceName)
 	flags.String(flagPrefix+"-tls-key-path", "", "local path to the TLS key used to serve "+serviceName)
 	flags.Duration(flagPrefix+"-max-conn-age", 30*time.Second, "how long a connection serving "+serviceName+" should be able to live")
@@ -250,18 +251,22 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 
 // GrpcListenFromFlags listens on an gRPC server using the configuration stored
 // in the cobra command that was registered with RegisterGrpcServerFlags.
-func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server) error {
+func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server, level zerolog.Level) error {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
 
 	if !MustGetBool(cmd, flagPrefix+"-enabled") {
 		return nil
 	}
 
+	network := MustGetString(cmd, flagPrefix+"-network")
 	addr := MustGetStringExpanded(cmd, flagPrefix+"-addr")
-	l, err := net.Listen("tcp", addr)
+	l, err := net.Listen(network, addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on addr for gRPC server: %w", err)
 	}
+
+	log.WithLevel(level).Str("addr", addr).Str("network", network).
+		Str("prefix", flagPrefix).Msg("grpc server started listening")
 
 	if err := srv.Serve(l); err != nil {
 		return fmt.Errorf("failed to serve gRPC: %w", err)
@@ -288,7 +293,7 @@ func RegisterHttpServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 }
 
 // HttpServerFromFlags creates an *http.Server as configured by the flags from
-// RegisterGrpcServerFlags().
+// RegisterHttpServerFlags().
 func HttpServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
 	return &http.Server{
@@ -298,7 +303,7 @@ func HttpServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
 
 // HttpListenFromFlags listens on an HTTP server using the configuration stored
 // in the cobra command that was registered with RegisterHttpServerFlags.
-func HttpListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server) error {
+func HttpListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, level zerolog.Level) error {
 	if !MustGetBool(cmd, flagPrefix+"-enabled") {
 		return nil
 	}
@@ -308,12 +313,14 @@ func HttpListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server
 
 	switch {
 	case certPath == "" && keyPath == "":
-		log.Warn().Str("prefix", flagPrefix).Msg("http server serving plaintext")
+		log.Warn().Str("addr", srv.Addr).Str("prefix", flagPrefix).Msg("http server serving plaintext")
+
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("failed while serving http: %w", err)
 		}
 		return nil
 	case certPath != "" && keyPath != "":
+		log.WithLevel(level).Str("addr", srv.Addr).Str("prefix", flagPrefix).Msg("https server started serving")
 		if err := srv.ListenAndServeTLS(certPath, keyPath); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("failed while serving https: %w", err)
 		}
