@@ -87,7 +87,7 @@ func CommandStack(cmdfns ...CobraRunFunc) CobraRunFunc {
 func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "log")
 	flags.String(flagPrefix+"-level", "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
-	flags.String(flagPrefix+"-format", "auto", `format of logs ("auto", "human", "json")`)
+	flags.String(flagPrefix+"-format", "auto", `format of logs ("auto", "console", "json")`)
 }
 
 // ZeroLogPreRunE returns a Cobra run func that configures the corresponding
@@ -103,8 +103,8 @@ func ZeroLogPreRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
 		}
 
 		format := MustGetString(cmd, flagPrefix+"-format")
-		if format == "human" || (format == "auto" && isatty.IsTerminal(os.Stdout.Fd())) {
-			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+		if format == "console" || format == "auto" && isatty.IsTerminal(os.Stdout.Fd()) {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		}
 
 		level := strings.ToLower(MustGetString(cmd, flagPrefix+"-level"))
