@@ -1,6 +1,7 @@
 package cobrautil
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -264,13 +265,17 @@ func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server
 
 	network := MustGetString(cmd, flagPrefix+"-network")
 	addr := MustGetStringExpanded(cmd, flagPrefix+"-addr")
+
 	l, err := net.Listen(network, addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on addr for gRPC server: %w", err)
 	}
 
-	log.WithLevel(level).Str("addr", addr).Str("network", network).
-		Str("prefix", flagPrefix).Msg("grpc server started listening")
+	log.WithLevel(level).
+		Str("addr", addr).
+		Str("network", network).
+		Str("prefix", flagPrefix).
+		Msg("grpc server started listening")
 
 	if err := srv.Serve(l); err != nil {
 		return fmt.Errorf("failed to serve gRPC: %w", err)
@@ -318,19 +323,21 @@ func HTTPListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server
 	switch {
 	case certPath == "" && keyPath == "":
 		log.Warn().Str("addr", srv.Addr).Str("prefix", flagPrefix).Msg("http server serving plaintext")
-
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("failed while serving http: %w", err)
 		}
 		return nil
+
 	case certPath != "" && keyPath != "":
 		log.WithLevel(level).Str("addr", srv.Addr).Str("prefix", flagPrefix).Msg("https server started serving")
-		if err := srv.ListenAndServeTLS(certPath, keyPath); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServeTLS(certPath, keyPath); err != nil && errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("failed while serving https: %w", err)
 		}
 		return nil
+
 	default:
-		return fmt.Errorf("failed to start http server: must provide both --%s-tls-cert-path and --%s-tls-key-path",
+		return fmt.Errorf(
+			"failed to start http server: must provide both --%s-tls-cert-path and --%s-tls-key-path",
 			flagPrefix,
 			flagPrefix,
 		)
