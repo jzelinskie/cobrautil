@@ -90,12 +90,12 @@ func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
 	flags.String(flagPrefix+"-format", "auto", `format of logs ("auto", "console", "json")`)
 }
 
-// ZeroLogPreRunE returns a Cobra run func that configures the corresponding
+// ZeroLogRunE returns a Cobra run func that configures the corresponding
 // log level from a command.
 //
 // The required flags can be added to a command by using
 // RegisterLoggingPersistentFlags().
-func ZeroLogPreRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
+func ZeroLogRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "log")
 	return func(cmd *cobra.Command, args []string) error {
 		if IsBuiltinCommand(cmd) {
@@ -128,6 +128,7 @@ func ZeroLogPreRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
 		}
 
 		log.WithLevel(prerunLevel).Str("new level", level).Msg("set log level")
+
 		return nil
 	}
 }
@@ -147,12 +148,12 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 	flags.String(flagPrefix+"-jaeger-service-name", serviceName, "jaeger service name for trace data")
 }
 
-// OpenTelemetryPreRunE returns a Cobra run func that configures the
+// OpenTelemetryRunE returns a Cobra run func that configures the
 // corresponding otel provider from a command.
 //
 // The required flags can be added to a command by using
 // RegisterOpenTelemetryFlags().
-func OpenTelemetryPreRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
+func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "otel")
 	return func(cmd *cobra.Command, args []string) error {
 		if IsBuiltinCommand(cmd) {
@@ -222,6 +223,7 @@ func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 // RegisterGrpcServerFlags().
 func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.ServerOption) (*grpc.Server, error) {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
+
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
 		MaxConnectionAge: MustGetDuration(cmd, flagPrefix+"-max-conn-age"),
 	}))
@@ -233,6 +235,7 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 	case certPath == "" && keyPath == "":
 		log.Warn().Str("prefix", flagPrefix).Msg("grpc server serving plaintext")
 		return grpc.NewServer(opts...), nil
+
 	case certPath != "" && keyPath != "":
 		creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
 		if err != nil {
@@ -240,6 +243,7 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 		}
 		opts = append(opts, grpc.Creds(creds))
 		return grpc.NewServer(opts...), nil
+
 	default:
 		return nil, fmt.Errorf(
 			"failed to start gRPC server: must provide both --%s-tls-cert-path and --%s-tls-key-path",
@@ -275,13 +279,13 @@ func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server
 	return nil
 }
 
-// RegisterHttpServerFlags adds the following flags for use with
+// RegisterHTTPServerFlags adds the following flags for use with
 // HttpServerFromFlags:
 // - "$PREFIX-addr"
 // - "$PREFIX-tls-cert-path"
 // - "$PREFIX-tls-key-path"
 // - "$PREFIX-enabled"
-func RegisterHttpServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
+func RegisterHTTPServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
 	serviceName = stringz.DefaultEmpty(serviceName, "http")
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":8443")
@@ -292,18 +296,18 @@ func RegisterHttpServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 	flags.Bool(flagPrefix+"-enabled", defaultEnabled, "enable "+serviceName+" http server")
 }
 
-// HttpServerFromFlags creates an *http.Server as configured by the flags from
+// HTTPServerFromFlags creates an *http.Server as configured by the flags from
 // RegisterHttpServerFlags().
-func HttpServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
+func HTTPServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
 	return &http.Server{
 		Addr: MustGetStringExpanded(cmd, flagPrefix+"-addr"),
 	}
 }
 
-// HttpListenFromFlags listens on an HTTP server using the configuration stored
+// HTTPListenFromFlags listens on an HTTP server using the configuration stored
 // in the cobra command that was registered with RegisterHttpServerFlags.
-func HttpListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, level zerolog.Level) error {
+func HTTPListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, level zerolog.Level) error {
 	if !MustGetBool(cmd, flagPrefix+"-enabled") {
 		return nil
 	}
