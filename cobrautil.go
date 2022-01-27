@@ -1,6 +1,7 @@
 package cobrautil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -19,6 +20,9 @@ import (
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
@@ -137,16 +141,16 @@ func ZeroLogRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
 // RegisterOpenTelemetryFlags adds the following flags for use with
 // OpenTelemetryPreRunE:
 // - "$PREFIX-provider"
-// - "$PREFIX-jaeger-endpoint"
-// - "$PREFIX-jaeger-service-name"
+// - "$PREFIX-endpoint"
+// - "$PREFIX-service-name"
 func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName string) {
 	bi, _ := debug.ReadBuildInfo()
 	flagPrefix = stringz.DefaultEmpty(flagPrefix, "otel")
 	serviceName = stringz.DefaultEmpty(serviceName, bi.Main.Path)
 
-	flags.String(flagPrefix+"-provider", "none", `opentelemetry provider for tracing ("none", "jaeger")`)
-	flags.String(flagPrefix+"-jaeger-endpoint", "http://jaeger:14268/api/traces", "jaeger collector endpoint")
-	flags.String(flagPrefix+"-jaeger-service-name", serviceName, "jaeger service name for trace data")
+	flags.String(flagPrefix+"-provider", "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
+	flags.String(flagPrefix+"-endpoint", "http://collector:14268/api/traces", "collector endpoint")
+	flags.String(flagPrefix+"-service-name", serviceName, "service name for trace data")
 }
 
 // OpenTelemetryRunE returns a Cobra run func that configures the
@@ -162,14 +166,29 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 		}
 
 		provider := strings.ToLower(MustGetString(cmd, flagPrefix+"-provider"))
+		serviceName := MustGetString(cmd, flagPrefix+"-service-name")
+
 		switch provider {
 		case "none":
 			// Nothing.
 		case "jaeger":
-			return initJaegerTracer(
-				MustGetString(cmd, flagPrefix+"-jaeger-endpoint"),
-				MustGetString(cmd, flagPrefix+"-jaeger-service-name"),
-			)
+			exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(MustGetString(cmd, flagPrefix+"endpoint"))))
+			if err != nil {
+				return err
+			}
+			return initOtelTracer(exporter, serviceName)
+		case "otlphttp":
+			exporter, err := otlptrace.New(context.Background(), otlptracehttp.NewClient())
+			if err != nil {
+				return err
+			}
+			return initOtelTracer(exporter, serviceName)
+		case "otlpgrpc":
+			exporter, err := otlptrace.New(context.Background(), otlptracegrpc.NewClient())
+			if err != nil {
+				return err
+			}
+			return initOtelTracer(exporter, serviceName)
 		default:
 			return fmt.Errorf("unknown tracing provider: %s", provider)
 		}
@@ -179,25 +198,30 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 	}
 }
 
-func initJaegerTracer(endpoint, serviceName string) error {
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
-	if err != nil {
-		return err
-	}
+func initOtelTracer(exporter trace.SpanExporter, serviceName string) error {
+	res, _ := resource.Merge(
+		resource.Default(),
+		resource.NewSchemaless(semconv.ServiceNameKey.String(serviceName)),
+	)
 
-	// Configure the global tracer as a batched, always sampling Jaeger exporter.
-	otel.SetTracerProvider(trace.NewTracerProvider(
+	tp := trace.NewTracerProvider(
 		trace.WithSampler(trace.AlwaysSample()),
-		trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exp)),
-		trace.WithResource(resource.NewSchemaless(semconv.ServiceNameKey.String(serviceName))),
-	))
+		trace.WithBatcher(exporter),
+		trace.WithResource(res),
+	)
+
+	otel.SetTracerProvider(tp)
 
 	// Configure the global tracer to use the W3C method for propagating contexts
 	// across services.
 	//
 	// For low-level details see:
 	// https://www.w3.org/TR/trace-context/
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.Baggage{},      // W3C baggage support
+		propagation.TraceContext{}, // W3C for compatibility with other tracing system
+	))
+
 	return nil
 }
 
