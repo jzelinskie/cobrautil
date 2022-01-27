@@ -86,13 +86,19 @@ func CommandStack(cmdfns ...CobraRunFunc) CobraRunFunc {
 	}
 }
 
+func prefixJoiner(prefix string) func(...string) string {
+	return func(xs ...string) string {
+		return stringz.Join("-", append([]string{prefix}, xs...)...)
+	}
+}
+
 // RegisterZeroLogFlags adds flags for use in with ZeroLogPreRunE:
 // - "$PREFIX-level"
 // - "$PREFIX-format"
 func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "log")
-	flags.String(flagPrefix+"-level", "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
-	flags.String(flagPrefix+"-format", "auto", `format of logs ("auto", "console", "json")`)
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "log"))
+	flags.String(prefixed("level"), "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
+	flags.String(prefixed("format"), "auto", `format of logs ("auto", "console", "json")`)
 }
 
 // ZeroLogRunE returns a Cobra run func that configures the corresponding
@@ -101,18 +107,18 @@ func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
 // The required flags can be added to a command by using
 // RegisterLoggingPersistentFlags().
 func ZeroLogRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "log")
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "log"))
 	return func(cmd *cobra.Command, args []string) error {
 		if IsBuiltinCommand(cmd) {
 			return nil // No-op for builtins
 		}
 
-		format := MustGetString(cmd, flagPrefix+"-format")
+		format := MustGetString(cmd, prefixed("format"))
 		if format == "console" || format == "auto" && isatty.IsTerminal(os.Stdout.Fd()) {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		}
 
-		level := strings.ToLower(MustGetString(cmd, flagPrefix+"-level"))
+		level := strings.ToLower(MustGetString(cmd, prefixed("level")))
 		switch level {
 		case "trace":
 			zerolog.SetGlobalLevel(zerolog.TraceLevel)
@@ -145,12 +151,12 @@ func ZeroLogRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
 // - "$PREFIX-service-name"
 func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName string) {
 	bi, _ := debug.ReadBuildInfo()
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "otel")
 	serviceName = stringz.DefaultEmpty(serviceName, bi.Main.Path)
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
 
-	flags.String(flagPrefix+"-provider", "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
-	flags.String(flagPrefix+"-endpoint", "http://collector:14268/api/traces", "collector endpoint")
-	flags.String(flagPrefix+"-service-name", serviceName, "service name for trace data")
+	flags.String(prefixed("provider"), "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
+	flags.String(prefixed("endpoint"), "http://collector:14268/api/traces", "collector endpoint")
+	flags.String(prefixed("service-name"), serviceName, "service name for trace data")
 }
 
 // OpenTelemetryRunE returns a Cobra run func that configures the
@@ -159,20 +165,20 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 // The required flags can be added to a command by using
 // RegisterOpenTelemetryFlags().
 func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "otel")
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
 	return func(cmd *cobra.Command, args []string) error {
 		if IsBuiltinCommand(cmd) {
 			return nil // No-op for builtins
 		}
 
-		provider := strings.ToLower(MustGetString(cmd, flagPrefix+"-provider"))
-		serviceName := MustGetString(cmd, flagPrefix+"-service-name")
+		provider := strings.ToLower(MustGetString(cmd, prefixed("provider")))
+		serviceName := MustGetString(cmd, prefixed("service-name"))
 
 		switch provider {
 		case "none":
 			// Nothing.
 		case "jaeger":
-			exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(MustGetString(cmd, flagPrefix+"-endpoint"))))
+			exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(MustGetString(cmd, prefixed("endpoint")))))
 			if err != nil {
 				return err
 			}
@@ -232,29 +238,29 @@ func initOtelTracer(exporter trace.SpanExporter, serviceName string) error {
 // - "$PREFIX-tls-key-path"
 // - "$PREFIX-max-conn-age"
 func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
 	serviceName = stringz.DefaultEmpty(serviceName, "grpc")
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":50051")
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
-	flags.String(flagPrefix+"-addr", defaultAddr, "address to listen on to serve "+serviceName)
-	flags.String(flagPrefix+"-network", "tcp", "network type to serve "+serviceName+` ("tcp", "tcp4", "tcp6", "unix", "unixpacket")`)
-	flags.String(flagPrefix+"-tls-cert-path", "", "local path to the TLS certificate used to serve "+serviceName)
-	flags.String(flagPrefix+"-tls-key-path", "", "local path to the TLS key used to serve "+serviceName)
-	flags.Duration(flagPrefix+"-max-conn-age", 30*time.Second, "how long a connection serving "+serviceName+" should be able to live")
-	flags.Bool(flagPrefix+"-enabled", defaultEnabled, "enable "+serviceName+" gRPC server")
+	flags.String(prefixed("addr"), defaultAddr, "address to listen on to serve "+serviceName)
+	flags.String(prefixed("network"), "tcp", "network type to serve "+serviceName+` ("tcp", "tcp4", "tcp6", "unix", "unixpacket")`)
+	flags.String(prefixed("tls-cert-path"), "", "local path to the TLS certificate used to serve "+serviceName)
+	flags.String(prefixed("tls-key-path"), "", "local path to the TLS key used to serve "+serviceName)
+	flags.Duration(prefixed("max-conn-age"), 30*time.Second, "how long a connection serving "+serviceName+" should be able to live")
+	flags.Bool(prefixed("enabled"), defaultEnabled, "enable "+serviceName+" gRPC server")
 }
 
 // GrpcServerFromFlags creates an *grpc.Server as configured by the flags from
 // RegisterGrpcServerFlags().
 func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.ServerOption) (*grpc.Server, error) {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
-		MaxConnectionAge: MustGetDuration(cmd, flagPrefix+"-max-conn-age"),
+		MaxConnectionAge: MustGetDuration(cmd, prefixed("max-conn-age")),
 	}))
 
-	certPath := MustGetStringExpanded(cmd, flagPrefix+"-tls-cert-path")
-	keyPath := MustGetStringExpanded(cmd, flagPrefix+"-tls-key-path")
+	certPath := MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
+	keyPath := MustGetStringExpanded(cmd, prefixed("tls-key-path"))
 
 	switch {
 	case certPath == "" && keyPath == "":
@@ -281,14 +287,14 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 // GrpcListenFromFlags listens on an gRPC server using the configuration stored
 // in the cobra command that was registered with RegisterGrpcServerFlags.
 func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server, level zerolog.Level) error {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "grpc")
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
-	if !MustGetBool(cmd, flagPrefix+"-enabled") {
+	if !MustGetBool(cmd, prefixed("enabled")) {
 		return nil
 	}
 
-	network := MustGetString(cmd, flagPrefix+"-network")
-	addr := MustGetStringExpanded(cmd, flagPrefix+"-addr")
+	network := MustGetString(cmd, prefixed("network"))
+	addr := MustGetStringExpanded(cmd, prefixed("addr"))
 
 	l, err := net.Listen(network, addr)
 	if err != nil {
@@ -315,34 +321,36 @@ func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server
 // - "$PREFIX-tls-key-path"
 // - "$PREFIX-enabled"
 func RegisterHTTPServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
 	serviceName = stringz.DefaultEmpty(serviceName, "http")
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":8443")
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
 
-	flags.String(flagPrefix+"-addr", defaultAddr, "address to listen on to serve "+serviceName)
-	flags.String(flagPrefix+"-tls-cert-path", "", "local path to the TLS certificate used to serve "+serviceName)
-	flags.String(flagPrefix+"-tls-key-path", "", "local path to the TLS key used to serve "+serviceName)
-	flags.Bool(flagPrefix+"-enabled", defaultEnabled, "enable "+serviceName+" http server")
+	flags.String(prefixed("addr"), defaultAddr, "address to listen on to serve "+serviceName)
+	flags.String(prefixed("tls-cert-path"), "", "local path to the TLS certificate used to serve "+serviceName)
+	flags.String(prefixed("tls-key-path"), "", "local path to the TLS key used to serve "+serviceName)
+	flags.Bool(prefixed("enabled"), defaultEnabled, "enable "+serviceName+" http server")
 }
 
 // HTTPServerFromFlags creates an *http.Server as configured by the flags from
 // RegisterHttpServerFlags().
 func HTTPServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
-	flagPrefix = stringz.DefaultEmpty(flagPrefix, "http")
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
+
 	return &http.Server{
-		Addr: MustGetStringExpanded(cmd, flagPrefix+"-addr"),
+		Addr: MustGetStringExpanded(cmd, prefixed("addr")),
 	}
 }
 
 // HTTPListenFromFlags listens on an HTTP server using the configuration stored
 // in the cobra command that was registered with RegisterHttpServerFlags.
 func HTTPListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, level zerolog.Level) error {
-	if !MustGetBool(cmd, flagPrefix+"-enabled") {
+	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
+	if !MustGetBool(cmd, prefixed("enabled")) {
 		return nil
 	}
 
-	certPath := MustGetStringExpanded(cmd, flagPrefix+"-tls-cert-path")
-	keyPath := MustGetStringExpanded(cmd, flagPrefix+"-tls-key-path")
+	certPath := MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
+	keyPath := MustGetStringExpanded(cmd, prefixed("tls-key-path"))
 
 	switch {
 	case certPath == "" && keyPath == "":
