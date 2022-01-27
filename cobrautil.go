@@ -172,7 +172,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 		case "none":
 			// Nothing.
 		case "jaeger":
-			exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(MustGetString(cmd, flagPrefix+"endpoint"))))
+			exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(MustGetString(cmd, flagPrefix+"-endpoint"))))
 			if err != nil {
 				return err
 			}
