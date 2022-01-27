@@ -176,19 +176,19 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if err != nil {
 				return err
 			}
-			return initOtlpTracer(exporter, serviceName)
+			return initOtelTracer(exporter, serviceName)
 		case "otlphttp":
 			exporter, err := otlptrace.New(context.Background(), otlptracehttp.NewClient())
 			if err != nil {
 				return err
 			}
-			return initOtlpTracer(exporter, serviceName)
+			return initOtelTracer(exporter, serviceName)
 		case "otlpgrpc":
 			exporter, err := otlptrace.New(context.Background(), otlptracegrpc.NewClient())
 			if err != nil {
 				return err
 			}
-			return initOtlpTracer(exporter, serviceName)
+			return initOtelTracer(exporter, serviceName)
 		default:
 			return fmt.Errorf("unknown tracing provider: %s", provider)
 		}
@@ -198,7 +198,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 	}
 }
 
-func initOtlpTracer(exporter trace.SpanExporter, serviceName string) error {
+func initOtelTracer(exporter trace.SpanExporter, serviceName string) error {
 	res, _ := resource.Merge(
 		resource.Default(),
 		resource.NewSchemaless(semconv.ServiceNameKey.String(serviceName)),
