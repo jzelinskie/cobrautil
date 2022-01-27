@@ -155,7 +155,7 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
 
 	flags.String(prefixed("provider"), "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
-	flags.String(prefixed("endpoint"), "http://collector:14268/api/traces", "collector endpoint")
+	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint")
 	flags.String(prefixed("service-name"), serviceName, "service name for trace data")
 }
 
@@ -173,24 +173,44 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 
 		provider := strings.ToLower(MustGetString(cmd, prefixed("provider")))
 		serviceName := MustGetString(cmd, prefixed("service-name"))
+		endpoint, _ := cmd.Flags().GetString(prefixed("endpoint"))
+		
+		var exporter trace.SpanExporter
+		var err error
 
+		// If endpoint is not set, the clients are configured via the OpenTelemetry environment variables or
+		// default values.
+		// See: https://github.com/open-telemetry/opentelemetry-go/tree/main/exporters/otlp/otlptrace#environment-variables
+		// or https://github.com/open-telemetry/opentelemetry-go/tree/main/exporters/jaeger#environment-variables
 		switch provider {
 		case "none":
 			// Nothing.
 		case "jaeger":
-			exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(MustGetString(cmd, prefixed("endpoint")))))
+			if endpoint != "" {
+				exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
+			} else {
+				exporter, err = jaeger.New(jaeger.WithCollectorEndpoint())
+			}
 			if err != nil {
 				return err
 			}
 			return initOtelTracer(exporter, serviceName)
 		case "otlphttp":
-			exporter, err := otlptrace.New(context.Background(), otlptracehttp.NewClient())
+			if endpoint != "" {
+				exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient(otlptracehttp.WithEndpoint(endpoint)))
+			} else {
+				exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient())
+			}
 			if err != nil {
 				return err
 			}
 			return initOtelTracer(exporter, serviceName)
 		case "otlpgrpc":
-			exporter, err := otlptrace.New(context.Background(), otlptracegrpc.NewClient())
+			if endpoint != "" {
+				exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient(otlptracegrpc.WithEndpoint(endpoint)))
+			} else {
+				exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient())
+			}
 			if err != nil {
 				return err
 			}
