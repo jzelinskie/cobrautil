@@ -157,7 +157,7 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
 
 	flags.String(prefixed("provider"), "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
-	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint")
+	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
 	flags.String(prefixed("service-name"), serviceName, "service name for trace data")
 	flags.String(prefixed("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
 }
