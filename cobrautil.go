@@ -18,6 +18,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/contrib/propagators/b3"
+	"go.opentelemetry.io/contrib/propagators/ot"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -157,6 +159,7 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 	flags.String(prefixed("provider"), "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
 	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint")
 	flags.String(prefixed("service-name"), serviceName, "service name for trace data")
+	flags.String(prefixed("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
 }
 
 // OpenTelemetryRunE returns a Cobra run func that configures the
@@ -174,7 +177,8 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 		provider := strings.ToLower(MustGetString(cmd, prefixed("provider")))
 		serviceName := MustGetString(cmd, prefixed("service-name"))
 		endpoint, _ := cmd.Flags().GetString(prefixed("endpoint"))
-		
+		propagators := strings.Split(MustGetString(cmd, prefixed("trace-propagator")), ",")
+
 		var exporter trace.SpanExporter
 		var err error
 
@@ -194,7 +198,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if err != nil {
 				return err
 			}
-			return initOtelTracer(exporter, serviceName)
+			return initOtelTracer(exporter, serviceName, propagators)
 		case "otlphttp":
 			if endpoint != "" {
 				exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient(otlptracehttp.WithEndpoint(endpoint)))
@@ -204,7 +208,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if err != nil {
 				return err
 			}
-			return initOtelTracer(exporter, serviceName)
+			return initOtelTracer(exporter, serviceName, propagators)
 		case "otlpgrpc":
 			if endpoint != "" {
 				exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient(otlptracegrpc.WithEndpoint(endpoint)))
@@ -214,7 +218,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if err != nil {
 				return err
 			}
-			return initOtelTracer(exporter, serviceName)
+			return initOtelTracer(exporter, serviceName, propagators)
 		default:
 			return fmt.Errorf("unknown tracing provider: %s", provider)
 		}
@@ -224,7 +228,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 	}
 }
 
-func initOtelTracer(exporter trace.SpanExporter, serviceName string) error {
+func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string) error {
 	res, _ := resource.Merge(
 		resource.Default(),
 		resource.NewSchemaless(semconv.ServiceNameKey.String(serviceName)),
@@ -237,18 +241,31 @@ func initOtelTracer(exporter trace.SpanExporter, serviceName string) error {
 	)
 
 	otel.SetTracerProvider(tp)
-
-	// Configure the global tracer to use the W3C method for propagating contexts
-	// across services.
-	//
-	// For low-level details see:
-	// https://www.w3.org/TR/trace-context/
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.Baggage{},      // W3C baggage support
-		propagation.TraceContext{}, // W3C for compatibility with other tracing system
-	))
+	setTracePropagators(propagators)
 
 	return nil
+}
+
+// setTextMapPropagator sets the OpenTelemetry trace propagation format.
+// Currently it supports b3, ot-trace and w3c.
+func setTracePropagators(propagators []string) {
+	var tmPropagators []propagation.TextMapPropagator
+
+	for _, p := range propagators {
+		switch p {
+		case "b3":
+			tmPropagators = append(tmPropagators, b3.New())
+		case "ottrace":
+			tmPropagators = append(tmPropagators, ot.OT{})
+		case "w3c":
+			fallthrough
+		default:
+			tmPropagators = append(tmPropagators, propagation.Baggage{})      // W3C baggage support
+			tmPropagators = append(tmPropagators, propagation.TraceContext{}) // W3C for compatibility with other tracing system
+		}
+	}
+
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(tmPropagators...))
 }
 
 // RegisterGrpcServerFlags adds the following flags for use with
