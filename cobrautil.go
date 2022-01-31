@@ -190,31 +190,34 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 		case "none":
 			// Nothing.
 		case "jaeger":
+			var opts []jaeger.CollectorEndpointOption
 			if endpoint != "" {
-				exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
-			} else {
-				exporter, err = jaeger.New(jaeger.WithCollectorEndpoint())
+				opts = append(opts, jaeger.WithEndpoint(endpoint))
 			}
+
+			exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(opts...))
 			if err != nil {
 				return err
 			}
 			return initOtelTracer(exporter, serviceName, propagators)
 		case "otlphttp":
+			var opts []otlptracehttp.Option
 			if endpoint != "" {
-				exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient(otlptracehttp.WithEndpoint(endpoint)))
-			} else {
-				exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient())
+				opts = append(opts, otlptracehttp.WithEndpoint(endpoint))
 			}
+
+			exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient(opts...))
 			if err != nil {
 				return err
 			}
 			return initOtelTracer(exporter, serviceName, propagators)
 		case "otlpgrpc":
+			var opts []otlptracegrpc.Option
 			if endpoint != "" {
-				exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient(otlptracegrpc.WithEndpoint(endpoint)))
-			} else {
-				exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient())
+				opts = append(opts, otlptracegrpc.WithEndpoint(endpoint))
 			}
+
+			exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient(opts...))
 			if err != nil {
 				return err
 			}
