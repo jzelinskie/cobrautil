@@ -176,7 +176,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 
 		provider := strings.ToLower(MustGetString(cmd, prefixed("provider")))
 		serviceName := MustGetString(cmd, prefixed("service-name"))
-		endpoint, _ := cmd.Flags().GetString(prefixed("endpoint"))
+		endpoint := MustGetString(cmd, prefixed("endpoint"))
 		propagators := strings.Split(MustGetString(cmd, prefixed("trace-propagator")), ",")
 
 		var exporter trace.SpanExporter
