@@ -244,6 +244,10 @@ github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
 go.opencensus.io v0.22.0/go.mod h1:+kGneAE2xo2IficOXnaByMWTGM9T73dGwxeWcUqIpI8=
+go.opentelemetry.io/contrib/propagators/b3 v1.3.0 h1:f+JfMSDNm2u+fekYYjyoixk+DWDTDAGD3SC50y61koE=
+go.opentelemetry.io/contrib/propagators/b3 v1.3.0/go.mod h1:qzi0km8qO3l2jxB5aDg4Q9xyqV4HKnCWZYpVYDTUIT0=
+go.opentelemetry.io/contrib/propagators/ot v1.3.0 h1:hqFpnicJXKy8l8PfwFWhRSt/TgOHCpugKiXsPP1zJUc=
+go.opentelemetry.io/contrib/propagators/ot v1.3.0/go.mod h1:Gpwe4R8j9Zbw7aaADYSQRE1U0o41j0TwnHxuhwRLklk=
 go.opentelemetry.io/otel v1.3.0 h1:APxLf0eiBwLl+SOXiJJCVYzA1OOJNyAoV8C5RNRyy7Y=
 go.opentelemetry.io/otel v1.3.0/go.mod h1:PWIKzi6JCp7sM0k9yZ43VX+T345uNbAkDKwHVjb2PTs=
 go.opentelemetry.io/otel/exporters/jaeger v1.3.0 h1:HfydzioALdtcB26H5WHc4K47iTETJCdloL7VN579/L0=
