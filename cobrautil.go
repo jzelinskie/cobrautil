@@ -232,10 +232,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 }
 
 func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string) error {
-	res, _ := resource.Merge(
-		resource.Default(),
-		resource.NewSchemaless(semconv.ServiceNameKey.String(serviceName)),
-	)
+	res, _ := resource.New(context.Background(), resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)))
 
 	tp := trace.NewTracerProvider(
 		trace.WithSampler(trace.AlwaysSample()),
