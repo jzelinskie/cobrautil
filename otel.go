@@ -124,7 +124,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 }
 
 func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string) error {
-	res, _ := resource.New(context.Background(), resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)))
+	res, _ := setResource(serviceName)
 
 	tp := trace.NewTracerProvider(
 		trace.WithSampler(trace.AlwaysSample()),
@@ -136,6 +136,14 @@ func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators
 	setTracePropagators(propagators)
 
 	return nil
+}
+
+func setResource(serviceName string) (*resource.Resource, error) {
+	return resource.New(
+		context.Background(),
+		resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)),
+		resource.WithFromEnv(),
+	)
 }
 
 // setTextMapPropagator sets the OpenTelemetry trace propagation format.
