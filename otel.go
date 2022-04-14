@@ -21,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 )
 
 // RegisterOpenTelemetryFlags adds the following flags for use with
@@ -143,6 +143,7 @@ func setResource(serviceName string) (*resource.Resource, error) {
 		context.Background(),
 		resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)),
 		resource.WithFromEnv(),
+		resource.WithTelemetrySDK(),
 	)
 }
 
