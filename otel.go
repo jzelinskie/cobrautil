@@ -124,7 +124,11 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 }
 
 func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string) error {
-	res, _ := setResource(serviceName)
+	res, err := setResource(serviceName)
+
+	if err == nil {
+		return err
+	}
 
 	tp := trace.NewTracerProvider(
 		trace.WithSampler(trace.AlwaysSample()),
