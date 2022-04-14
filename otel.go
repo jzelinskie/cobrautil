@@ -21,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 )
 
 // RegisterOpenTelemetryFlags adds the following flags for use with
@@ -124,7 +124,10 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 }
 
 func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string) error {
-	res, _ := resource.New(context.Background(), resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)))
+	res, err := setResource(serviceName)
+	if err == nil {
+		return err
+	}
 
 	tp := trace.NewTracerProvider(
 		trace.WithSampler(trace.AlwaysSample()),
@@ -136,6 +139,15 @@ func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators
 	setTracePropagators(propagators)
 
 	return nil
+}
+
+func setResource(serviceName string) (*resource.Resource, error) {
+	return resource.New(
+		context.Background(),
+		resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)),
+		resource.WithFromEnv(),
+		resource.WithTelemetrySDK(),
+	)
 }
 
 // setTextMapPropagator sets the OpenTelemetry trace propagation format.
