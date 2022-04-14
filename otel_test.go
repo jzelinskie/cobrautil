@@ -1,7 +1,6 @@
 package cobrautil
 
 import (
-	"reflect"
 	"testing"
 
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -31,7 +30,8 @@ func Test_setResource(t *testing.T) {
 			envVars: map[string]string{},
 			args:    args{serviceName: "testService"},
 			want: map[string]string{
-				string(semconv.ServiceNameKey): "testService",
+				string(semconv.ServiceNameKey):           "testService",
+				string(semconv.DeploymentEnvironmentKey): "",
 			},
 		},
 		{
@@ -56,8 +56,12 @@ func Test_setResource(t *testing.T) {
 				t.Errorf("setResource() error = %v", err)
 				return
 			}
-			if !reflect.DeepEqual(tt.want, toMap(got)) {
-				t.Errorf("setResource() mismatch want: %v, got: %v", tt.want, toMap(got))
+
+			gotMap := toMap(got)
+			for k, v := range tt.want {
+				if gotMap[k] != v {
+					t.Errorf("setResource() mismatch for attribute %s: want: %s got: %s", k, v, gotMap[k])
+				}
 			}
 		})
 	}
