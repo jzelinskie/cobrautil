@@ -33,6 +33,7 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 		}
 
 		v := viper.New()
+		v.AllowEmptyEnv(true)
 		viper.SetEnvPrefix(prefix)
 
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
