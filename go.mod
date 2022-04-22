@@ -1,6 +1,6 @@
 module github.com/jzelinskie/cobrautil
 
-go 1.17
+go 1.18
 
 require (
 	github.com/jzelinskie/stringz v0.0.1
