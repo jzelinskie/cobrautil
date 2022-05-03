@@ -106,7 +106,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 		case "otlpgrpc":
 			var opts []otlptracegrpc.Option
 			if endpoint != "" {
-				opts = append(opts, otlptracegrpc.WithEndpoint(endpoint), otlptracegrpc.WithInsecure())
+				opts = append(opts, otlptracegrpc.WithEndpoint(endpoint))
 			}
 
 			exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient(opts...))
