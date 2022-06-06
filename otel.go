@@ -127,7 +127,12 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			return fmt.Errorf("unknown tracing provider: %s", provider)
 		}
 
-		log.WithLevel(prerunLevel).Str("new provider", provider).Msg("set tracing provider")
+		log.
+			WithLevel(prerunLevel).
+			Str("provider", provider).
+			Str("endpoint", endpoint).
+			Str("service", serviceName).
+			Msg("setup opentelemetry tracing")
 		return nil
 	}
 }
