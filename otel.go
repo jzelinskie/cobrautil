@@ -91,7 +91,10 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if err != nil {
 				return err
 			}
-			return initOtelTracer(exporter, serviceName, propagators)
+
+			if err := initOtelTracer(exporter, serviceName, propagators); err != nil {
+				return err
+			}
 		case "otlphttp":
 			var opts []otlptracehttp.Option
 			if endpoint != "" {
@@ -102,7 +105,10 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if err != nil {
 				return err
 			}
-			return initOtelTracer(exporter, serviceName, propagators)
+
+			if err := initOtelTracer(exporter, serviceName, propagators); err != nil {
+				return err
+			}
 		case "otlpgrpc":
 			var opts []otlptracegrpc.Option
 			if endpoint != "" {
@@ -113,7 +119,10 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if err != nil {
 				return err
 			}
-			return initOtelTracer(exporter, serviceName, propagators)
+
+			if err := initOtelTracer(exporter, serviceName, propagators); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown tracing provider: %s", provider)
 		}
@@ -124,30 +133,24 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 }
 
 func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string) error {
-	res, err := setResource(serviceName)
-	if err != nil {
-		return err
-	}
-
-	tp := trace.NewTracerProvider(
-		trace.WithSampler(trace.AlwaysSample()),
-		trace.WithBatcher(exporter),
-		trace.WithResource(res),
-	)
-
-	otel.SetTracerProvider(tp)
-	setTracePropagators(propagators)
-
-	return nil
-}
-
-func setResource(serviceName string) (*resource.Resource, error) {
-	return resource.New(
+	res, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)),
 		resource.WithFromEnv(),
 		resource.WithTelemetrySDK(),
 	)
+	if err != nil {
+		return err
+	}
+
+	otel.SetTracerProvider(trace.NewTracerProvider(
+		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithBatcher(exporter),
+		trace.WithResource(res),
+	))
+	setTracePropagators(propagators)
+
+	return nil
 }
 
 // setTextMapPropagator sets the OpenTelemetry trace propagation format.
