@@ -3,6 +3,7 @@ package cobrautil
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"runtime/debug"
 	"strings"
 
@@ -38,6 +39,7 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
 	flags.String(prefixed("service-name"), serviceName, "service name for trace data")
 	flags.String(prefixed("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
+	flags.String(prefixed("insecure"), "false", `connect to the OpenTelemetry collector in plaintext`)
 
 	// Legacy flags! Will eventually be dropped!
 	flags.String("otel-jaeger-endpoint", "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
@@ -65,6 +67,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 		provider := strings.ToLower(MustGetString(cmd, prefixed("provider")))
 		serviceName := MustGetString(cmd, prefixed("service-name"))
 		endpoint := MustGetString(cmd, prefixed("endpoint"))
+		insecure := MustGetBool(cmd, prefixed("insecure"))
 		propagators := strings.Split(MustGetString(cmd, prefixed("trace-propagator")), ",")
 
 		var exporter trace.SpanExporter
@@ -83,7 +86,15 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			serviceName = stringz.Default(serviceName, MustGetString(cmd, "otel-jaeger-service-name"), "", cmd.Flags().Lookup(prefixed("service-name")).DefValue)
 
 			var opts []jaeger.CollectorEndpointOption
+
 			if endpoint != "" {
+				parsed, err := url.Parse(endpoint)
+				if err != nil {
+					return fmt.Errorf("failed to parse endpoint: %w", err)
+				}
+				if (insecure && parsed.Scheme == "https") || (!insecure && parsed.Scheme == "http") {
+					return fmt.Errorf("endpoint schema is %s but insecure flag is set to %t", parsed.Scheme, insecure)
+				}
 				opts = append(opts, jaeger.WithEndpoint(endpoint))
 			}
 
@@ -100,7 +111,9 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			if endpoint != "" {
 				opts = append(opts, otlptracehttp.WithEndpoint(endpoint))
 			}
-
+			if insecure {
+				opts = append(opts, otlptracehttp.WithInsecure())
+			}
 			exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient(opts...))
 			if err != nil {
 				return err
@@ -113,6 +126,9 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			var opts []otlptracegrpc.Option
 			if endpoint != "" {
 				opts = append(opts, otlptracegrpc.WithEndpoint(endpoint))
+			}
+			if insecure {
+				opts = append(opts, otlptracegrpc.WithInsecure())
 			}
 
 			exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient(opts...))
@@ -132,6 +148,7 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			Str("provider", provider).
 			Str("endpoint", endpoint).
 			Str("service", serviceName).
+			Bool("insecure", insecure).
 			Msg("setup opentelemetry tracing")
 		return nil
 	}
