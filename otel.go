@@ -39,7 +39,7 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
 	flags.String(prefixed("service-name"), serviceName, "service name for trace data")
 	flags.String(prefixed("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
-	flags.String(prefixed("insecure"), "false", `connect to the OpenTelemetry collector in plaintext`)
+	flags.Bool(prefixed("insecure"), false, `connect to the OpenTelemetry collector in plaintext`)
 
 	// Legacy flags! Will eventually be dropped!
 	flags.String("otel-jaeger-endpoint", "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
