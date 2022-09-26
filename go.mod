@@ -1,4 +1,4 @@
-module github.com/jzelinskie/cobrautil
+module github.com/jzelinskie/cobrautil/v2
 
 go 1.18
 

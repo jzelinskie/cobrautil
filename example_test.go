@@ -4,7 +4,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
-	"github.com/jzelinskie/cobrautil"
+	"github.com/jzelinskie/cobrautil/v2"
+	zl "github.com/jzelinskie/cobrautil/v2/zerolog"
 )
 
 func ExampleCommandStack() {
@@ -12,27 +13,27 @@ func ExampleCommandStack() {
 		Use: "mycmd",
 		PreRunE: cobrautil.CommandStack(
 			cobrautil.SyncViperPreRunE("myprogram"),
-			cobrautil.ZeroLogRunE("log", zerolog.InfoLevel),
+			zl.ZeroLogRunE("log", zerolog.InfoLevel),
 		),
 	}
 
-	cobrautil.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
+	zl.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
 }
 
 func ExampleRegisterZeroLogFlags() {
 	cmd := &cobra.Command{
 		Use:     "mycmd",
-		PreRunE: cobrautil.ZeroLogRunE("log", zerolog.InfoLevel),
+		PreRunE: zl.ZeroLogRunE("log", zerolog.InfoLevel),
 	}
 
-	cobrautil.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
+	zl.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
 }
 
 func ExampleZeroLogRunE() {
 	cmd := &cobra.Command{
 		Use:     "mycmd",
-		PreRunE: cobrautil.ZeroLogRunE("log", zerolog.InfoLevel),
+		PreRunE: zl.ZeroLogRunE("log", zerolog.InfoLevel),
 	}
 
-	cobrautil.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
+	zl.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
 }

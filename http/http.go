@@ -1,10 +1,11 @@
-package cobrautil
+package http
 
 import (
 	"errors"
 	"fmt"
 	"net/http"
 
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/jzelinskie/stringz"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -21,7 +22,7 @@ import (
 func RegisterHTTPServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
 	serviceName = stringz.DefaultEmpty(serviceName, "http")
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":8443")
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
 
 	flags.String(prefixed("addr"), defaultAddr, "address to listen on to serve "+serviceName)
 	flags.String(prefixed("tls-cert-path"), "", "local path to the TLS certificate used to serve "+serviceName)
@@ -32,23 +33,23 @@ func RegisterHTTPServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 // HTTPServerFromFlags creates an *http.Server as configured by the flags from
 // RegisterHttpServerFlags().
 func HTTPServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
 
 	return &http.Server{
-		Addr: MustGetStringExpanded(cmd, prefixed("addr")),
+		Addr: cobrautil.MustGetStringExpanded(cmd, prefixed("addr")),
 	}
 }
 
 // HTTPListenFromFlags listens on an HTTP server using the configuration stored
 // in the cobra command that was registered with RegisterHttpServerFlags.
 func HTTPListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, level zerolog.Level) error {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
-	if !MustGetBool(cmd, prefixed("enabled")) {
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
+	if !cobrautil.MustGetBool(cmd, prefixed("enabled")) {
 		return nil
 	}
 
-	certPath := MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
-	keyPath := MustGetStringExpanded(cmd, prefixed("tls-key-path"))
+	certPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
+	keyPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-key-path"))
 
 	switch {
 	case certPath == "" && keyPath == "":

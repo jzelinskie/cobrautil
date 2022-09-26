@@ -1,4 +1,4 @@
-package cobrautil
+package otel
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/jzelinskie/stringz"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -33,7 +34,7 @@ import (
 func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName string) {
 	bi, _ := debug.ReadBuildInfo()
 	serviceName = stringz.DefaultEmpty(serviceName, bi.Main.Path)
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
 
 	flags.String(prefixed("provider"), "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
 	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
@@ -57,18 +58,18 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 //
 // The required flags can be added to a command by using
 // RegisterOpenTelemetryFlags().
-func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
+func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) cobrautil.CobraRunFunc {
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
 	return func(cmd *cobra.Command, args []string) error {
-		if IsBuiltinCommand(cmd) {
+		if cobrautil.IsBuiltinCommand(cmd) {
 			return nil // No-op for builtins
 		}
 
-		provider := strings.ToLower(MustGetString(cmd, prefixed("provider")))
-		serviceName := MustGetString(cmd, prefixed("service-name"))
-		endpoint := MustGetString(cmd, prefixed("endpoint"))
-		insecure := MustGetBool(cmd, prefixed("insecure"))
-		propagators := strings.Split(MustGetString(cmd, prefixed("trace-propagator")), ",")
+		provider := strings.ToLower(cobrautil.MustGetString(cmd, prefixed("provider")))
+		serviceName := cobrautil.MustGetString(cmd, prefixed("service-name"))
+		endpoint := cobrautil.MustGetString(cmd, prefixed("endpoint"))
+		insecure := cobrautil.MustGetBool(cmd, prefixed("insecure"))
+		propagators := strings.Split(cobrautil.MustGetString(cmd, prefixed("trace-propagator")), ",")
 
 		var exporter trace.SpanExporter
 		var err error
@@ -82,8 +83,8 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			// Nothing.
 		case "jaeger":
 			// Legacy flags! Will eventually be dropped!
-			endpoint = stringz.DefaultEmpty(endpoint, MustGetString(cmd, "otel-jaeger-endpoint"))
-			serviceName = stringz.Default(serviceName, MustGetString(cmd, "otel-jaeger-service-name"), "", cmd.Flags().Lookup(prefixed("service-name")).DefValue)
+			endpoint = stringz.DefaultEmpty(endpoint, cobrautil.MustGetString(cmd, "otel-jaeger-endpoint"))
+			serviceName = stringz.Default(serviceName, cobrautil.MustGetString(cmd, "otel-jaeger-service-name"), "", cmd.Flags().Lookup(prefixed("service-name")).DefValue)
 
 			var opts []jaeger.CollectorEndpointOption
 

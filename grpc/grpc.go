@@ -1,10 +1,12 @@
-package cobrautil
+package grpc
 
 import (
 	"fmt"
+
 	"net"
 	"time"
 
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/jzelinskie/stringz"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -24,7 +26,7 @@ import (
 func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
 	serviceName = stringz.DefaultEmpty(serviceName, "grpc")
 	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":50051")
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
 	flags.String(prefixed("addr"), defaultAddr, "address to listen on to serve "+serviceName)
 	flags.String(prefixed("network"), "tcp", "network type to serve "+serviceName+` ("tcp", "tcp4", "tcp6", "unix", "unixpacket")`)
@@ -37,14 +39,14 @@ func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 // GrpcServerFromFlags creates an *grpc.Server as configured by the flags from
 // RegisterGrpcServerFlags().
 func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.ServerOption) (*grpc.Server, error) {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
-		MaxConnectionAge: MustGetDuration(cmd, prefixed("max-conn-age")),
+		MaxConnectionAge: cobrautil.MustGetDuration(cmd, prefixed("max-conn-age")),
 	}))
 
-	certPath := MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
-	keyPath := MustGetStringExpanded(cmd, prefixed("tls-key-path"))
+	certPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
+	keyPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-key-path"))
 
 	switch {
 	case certPath == "" && keyPath == "":
@@ -71,14 +73,14 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 // GrpcListenFromFlags listens on an gRPC server using the configuration stored
 // in the cobra command that was registered with RegisterGrpcServerFlags.
 func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server, level zerolog.Level) error {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
-	if !MustGetBool(cmd, prefixed("enabled")) {
+	if !cobrautil.MustGetBool(cmd, prefixed("enabled")) {
 		return nil
 	}
 
-	network := MustGetString(cmd, prefixed("network"))
-	addr := MustGetStringExpanded(cmd, prefixed("addr"))
+	network := cobrautil.MustGetString(cmd, prefixed("network"))
+	addr := cobrautil.MustGetStringExpanded(cmd, prefixed("addr"))
 
 	l, err := net.Listen(network, addr)
 	if err != nil {

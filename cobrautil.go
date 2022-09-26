@@ -53,7 +53,7 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 // CobraRunFunc is the signature of cobra.Command RunFuncs.
 type CobraRunFunc func(cmd *cobra.Command, args []string) error
 
-// RunFuncStack chains together a collection of CobraCommandFuncs into one.
+// CommandStack chains together a collection of CobraCommandFuncs into one.
 func CommandStack(cmdfns ...CobraRunFunc) CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		for _, cmdfn := range cmdfns {
@@ -65,7 +65,10 @@ func CommandStack(cmdfns ...CobraRunFunc) CobraRunFunc {
 	}
 }
 
-func prefixJoiner(prefix string) func(...string) string {
+// PrefixJoiner joins a list of strings with the "-" separator, including the provided prefix string
+//
+// example: PrefixJoiner("hi")("how", "are", "you") = "hi-how-are-you"
+func PrefixJoiner(prefix string) func(...string) string {
 	return func(xs ...string) string {
 		return stringz.Join("-", append([]string{prefix}, xs...)...)
 	}

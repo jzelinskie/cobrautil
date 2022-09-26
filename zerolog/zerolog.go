@@ -1,10 +1,11 @@
-package cobrautil
+package zerolog
 
 import (
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/jzelinskie/stringz"
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
@@ -17,7 +18,7 @@ import (
 // - "$PREFIX-level"
 // - "$PREFIX-format"
 func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "log"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "log"))
 	flags.String(prefixed("level"), "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
 	flags.String(prefixed("format"), "auto", `format of logs ("auto", "console", "json")`)
 }
@@ -27,19 +28,19 @@ func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
 //
 // The required flags can be added to a command by using
 // RegisterLoggingPersistentFlags().
-func ZeroLogRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "log"))
+func ZeroLogRunE(flagPrefix string, prerunLevel zerolog.Level) cobrautil.CobraRunFunc {
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "log"))
 	return func(cmd *cobra.Command, args []string) error {
-		if IsBuiltinCommand(cmd) {
+		if cobrautil.IsBuiltinCommand(cmd) {
 			return nil // No-op for builtins
 		}
 
-		format := MustGetString(cmd, prefixed("format"))
+		format := cobrautil.MustGetString(cmd, prefixed("format"))
 		if format == "console" || format == "auto" && isatty.IsTerminal(os.Stdout.Fd()) {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		}
 
-		level := strings.ToLower(MustGetString(cmd, prefixed("level")))
+		level := strings.ToLower(cobrautil.MustGetString(cmd, prefixed("level")))
 		switch level {
 		case "trace":
 			zerolog.SetGlobalLevel(zerolog.TraceLevel)
