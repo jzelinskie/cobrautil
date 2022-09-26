@@ -52,12 +52,12 @@ func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
 	flags.String(prefixed("format"), "auto", `format of logs ("auto", "console", "json")`)
 }
 
-// ZeroLogRunE returns a Cobra run func that configures the corresponding
+// RunE returns a Cobra run func that configures the corresponding
 // log level from a command.
 //
 // The required flags can be added to a command by using
 // RegisterLoggingPersistentFlags().
-func ZeroLogRunE(flagPrefix string, prerunLevel zerolog.Level) cobrautil.CobraRunFunc {
+func RunE(flagPrefix string, prerunLevel zerolog.Level) cobrautil.CobraRunFunc {
 	return New(flagPrefix, WithPreRunLevel(prerunLevel)).RunE()
 }
 

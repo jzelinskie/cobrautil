@@ -30,9 +30,9 @@ func RegisterHTTPServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 	flags.Bool(prefixed("enabled"), defaultEnabled, "enable "+serviceName+" http server")
 }
 
-// HTTPServerFromFlags creates an *http.Server as configured by the flags from
+// ServerFromFlags creates an *http.Server as configured by the flags from
 // RegisterHttpServerFlags().
-func HTTPServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
+func ServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
 	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
 
 	return &http.Server{
@@ -40,9 +40,9 @@ func HTTPServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
 	}
 }
 
-// HTTPListenFromFlags listens on an HTTP server using the configuration stored
+// ListenFromFlags listens on an HTTP server using the configuration stored
 // in the cobra command that was registered with RegisterHttpServerFlags.
-func HTTPListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, level zerolog.Level) error {
+func ListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, level zerolog.Level) error {
 	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
 	if !cobrautil.MustGetBool(cmd, prefixed("enabled")) {
 		return nil

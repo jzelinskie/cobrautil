@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"fmt"
-
 	"net"
 	"time"
 
@@ -36,9 +35,9 @@ func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defa
 	flags.Bool(prefixed("enabled"), defaultEnabled, "enable "+serviceName+" gRPC server")
 }
 
-// GrpcServerFromFlags creates an *grpc.Server as configured by the flags from
+// ServerFromFlags creates an *grpc.Server as configured by the flags from
 // RegisterGrpcServerFlags().
-func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.ServerOption) (*grpc.Server, error) {
+func ServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.ServerOption) (*grpc.Server, error) {
 	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -70,9 +69,9 @@ func GrpcServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.Ser
 	}
 }
 
-// GrpcListenFromFlags listens on an gRPC server using the configuration stored
+// ListenFromFlags listens on an gRPC server using the configuration stored
 // in the cobra command that was registered with RegisterGrpcServerFlags.
-func GrpcListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server, level zerolog.Level) error {
+func ListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server, level zerolog.Level) error {
 	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
 
 	if !cobrautil.MustGetBool(cmd, prefixed("enabled")) {

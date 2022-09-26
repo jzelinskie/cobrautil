@@ -13,7 +13,7 @@ func ExampleCommandStack() {
 		Use: "mycmd",
 		PreRunE: cobrautil.CommandStack(
 			cobrautil.SyncViperPreRunE("myprogram"),
-			zl.ZeroLogRunE("log", zerolog.InfoLevel),
+			zl.RunE("log", zerolog.InfoLevel),
 		),
 	}
 
@@ -23,16 +23,16 @@ func ExampleCommandStack() {
 func ExampleRegisterZeroLogFlags() {
 	cmd := &cobra.Command{
 		Use:     "mycmd",
-		PreRunE: zl.ZeroLogRunE("log", zerolog.InfoLevel),
+		PreRunE: zl.RunE("log", zerolog.InfoLevel),
 	}
 
 	zl.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
 }
 
-func ExampleZeroLogRunE() {
+func ExampleRunE() {
 	cmd := &cobra.Command{
 		Use:     "mycmd",
-		PreRunE: zl.ZeroLogRunE("log", zerolog.InfoLevel),
+		PreRunE: zl.RunE("log", zerolog.InfoLevel),
 	}
 
 	zl.RegisterZeroLogFlags(cmd.PersistentFlags(), "log")
