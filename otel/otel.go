@@ -30,9 +30,8 @@ type ConfigureFunc = func(cu *CobraUtil)
 
 // New creates a configuration that exposes RegisterFlags and RunE
 // to integrate with cobra
-func New(flagPrefix, serviceName string, configurations ...ConfigureFunc) *CobraUtil {
+func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
 	cu := CobraUtil{
-		flagPrefix:  flagPrefix,
 		serviceName: serviceName,
 		preRunLevel: 1,
 		logger:      logr.Discard(),
@@ -83,8 +82,8 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 //
 // The required flags can be added to a command by using
 // RegisterOpenTelemetryFlags()
-func OpenTelemetryRunE(flagPrefix string, preRunLevel int) cobrautil.CobraRunFunc {
-	return New(flagPrefix, "").RunE()
+func OpenTelemetryRunE(flagPrefix, serviceName string, preRunLevel int) cobrautil.CobraRunFunc {
+	return New(serviceName, WithFlagPrefix(flagPrefix), WithPreRunLevel(preRunLevel)).RunE()
 }
 
 // RegisterFlags adds the following flags for use with
@@ -203,6 +202,20 @@ func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
 func WithLogger(logger logr.Logger) ConfigureFunc {
 	return func(cu *CobraUtil) {
 		cu.logger = logger
+	}
+}
+
+// WithFlagPrefix defines prefix used with the generated flags. Defaults to "log".
+func WithFlagPrefix(flagPrefix string) ConfigureFunc {
+	return func(cu *CobraUtil) {
+		cu.flagPrefix = flagPrefix
+	}
+}
+
+// WithPreRunLevel defines the logging level used for pre-run log messages. Debug by default.
+func WithPreRunLevel(preRunLevel int) ConfigureFunc {
+	return func(cu *CobraUtil) {
+		cu.preRunLevel = preRunLevel
 	}
 }
 

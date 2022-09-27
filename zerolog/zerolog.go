@@ -22,9 +22,8 @@ type ConfigureFunc = func(cu *CobraUtil)
 
 // New creates a configuration that exposes RegisterZeroLogFlags and ZeroLogRunE
 // to integrate with cobra
-func New(flagPrefix string, configurations ...ConfigureFunc) *CobraUtil {
+func New(configurations ...ConfigureFunc) *CobraUtil {
 	cu := CobraUtil{
-		flagPrefix:  flagPrefix,
 		preRunLevel: zerolog.DebugLevel,
 	}
 	for _, configure := range configurations {
@@ -58,7 +57,7 @@ func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
 // The required flags can be added to a command by using
 // RegisterLoggingPersistentFlags().
 func RunE(flagPrefix string, prerunLevel zerolog.Level) cobrautil.CobraRunFunc {
-	return New(flagPrefix, WithPreRunLevel(prerunLevel)).RunE()
+	return New(WithFlagPrefix(flagPrefix), WithPreRunLevel(prerunLevel)).RunE()
 }
 
 // RegisterFlags adds flags for use in with ZeroLogPreRunE:
@@ -129,6 +128,13 @@ func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
 			Bool("async", cu.async).
 			Msg("configured zerolog")
 		return nil
+	}
+}
+
+// WithFlagPrefix defines prefix used with the generated flags. Defaults to "log".
+func WithFlagPrefix(flagPrefix string) ConfigureFunc {
+	return func(cu *CobraUtil) {
+		cu.flagPrefix = flagPrefix
 	}
 }
 
