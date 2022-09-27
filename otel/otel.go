@@ -33,7 +33,7 @@ type ConfigureFunc = func(cu *CobraUtil)
 func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
 	cu := CobraUtil{
 		serviceName: serviceName,
-		preRunLevel: 1,
+		preRunLevel: 0,
 		logger:      logr.Discard(),
 	}
 	for _, configure := range configurations {
@@ -191,7 +191,8 @@ func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
 		}
 
 		cu.logger.V(cu.preRunLevel).
-			Info("setup opentelemetry tracing", "provider", provider,
+			Info("configured opentelemetry tracing",
+				"provider", provider,
 				"endpoint", endpoint,
 				"service", serviceName,
 				"insecure", insecure)

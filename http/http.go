@@ -20,7 +20,7 @@ type ConfigureFunc = func(cu *CobraUtil)
 func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
 	cu := CobraUtil{
 		serviceName:    stringz.DefaultEmpty(serviceName, "http"),
-		preRunLevel:    1,
+		preRunLevel:    0,
 		logger:         logr.Discard(),
 		defaultAddr:    ":8443",
 		defaultEnabled: false,
@@ -105,14 +105,22 @@ func (cu CobraUtil) ListenWithServerFromFlags(cmd *cobra.Command, srv *http.Serv
 
 	switch {
 	case certPath == "" && keyPath == "":
-		cu.logger.V(1).Info("http server serving plaintext", "addr", srv.Addr, "prefix", cu.flagPrefix)
+		cu.logger.V(cu.preRunLevel).Info("http server started serving",
+			"addr", srv.Addr,
+			"prefix", cu.flagPrefix,
+			"scheme", "http",
+			"insecure", "true")
 		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("failed while serving http: %w", err)
 		}
 		return nil
 
 	case certPath != "" && keyPath != "":
-		cu.logger.V(cu.preRunLevel).Info("https server started serving", "addr", srv.Addr, "prefix", cu.flagPrefix)
+		cu.logger.V(cu.preRunLevel).Info("http server started serving",
+			"addr", srv.Addr,
+			"prefix", cu.flagPrefix,
+			"scheme", "https",
+			"insecure", "false")
 		if err := srv.ListenAndServeTLS(certPath, keyPath); err != nil && errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("failed while serving https: %w", err)
 		}

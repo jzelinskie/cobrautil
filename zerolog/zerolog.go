@@ -24,7 +24,7 @@ type ConfigureFunc = func(cu *CobraUtil)
 // to integrate with cobra
 func New(configurations ...ConfigureFunc) *CobraUtil {
 	cu := CobraUtil{
-		preRunLevel: zerolog.DebugLevel,
+		preRunLevel: zerolog.InfoLevel,
 	}
 	for _, configure := range configurations {
 		configure(&cu)
@@ -125,8 +125,9 @@ func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
 		l.WithLevel(cu.preRunLevel).
 			Str("format", format).
 			Str("log_level", level).
+			Str("provider", "zerolog").
 			Bool("async", cu.async).
-			Msg("configured zerolog")
+			Msg("configured logging")
 		return nil
 	}
 }

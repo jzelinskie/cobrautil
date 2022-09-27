@@ -24,7 +24,7 @@ type ConfigureFunc = func(cu *CobraUtil)
 func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
 	cu := CobraUtil{
 		serviceName:    stringz.DefaultEmpty(serviceName, "grpc"),
-		preRunLevel:    1,
+		preRunLevel:    0,
 		logger:         logr.Discard(),
 		defaultAddr:    ":50051",
 		defaultEnabled: false,
@@ -94,11 +94,10 @@ func (cu CobraUtil) ServerFromFlags(cmd *cobra.Command, opts ...grpc.ServerOptio
 	keyPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-key-path"))
 
 	switch {
-	case certPath == "" && keyPath == "":
-		cu.logger.V(cu.preRunLevel).Info("grpc server serving plaintext", "prefix", cu.flagPrefix)
+	case isInsecure(certPath, keyPath):
 		return grpc.NewServer(opts...), nil
 
-	case certPath != "" && keyPath != "":
+	case isSecure(certPath, keyPath):
 		creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
 		if err != nil {
 			return nil, err
@@ -138,11 +137,14 @@ func (cu CobraUtil) ListenFromFlags(cmd *cobra.Command, srv *grpc.Server) error 
 		return fmt.Errorf("failed to listen on addr for gRPC server: %w", err)
 	}
 
+	certPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
+	keyPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-key-path"))
 	cu.logger.V(cu.preRunLevel).Info(
 		"grpc server started listening",
 		"addr", addr,
 		"network", network,
-		"prefix", cu.flagPrefix)
+		"prefix", cu.flagPrefix,
+		"insecure", isInsecure(certPath, keyPath))
 
 	if err := srv.Serve(l); err != nil {
 		return fmt.Errorf("failed to serve gRPC: %w", err)
@@ -185,4 +187,12 @@ func WithPreRunLevel(preRunLevel int) ConfigureFunc {
 	return func(cu *CobraUtil) {
 		cu.preRunLevel = preRunLevel
 	}
+}
+
+func isInsecure(certPath, keyPath string) bool {
+	return certPath == "" && keyPath == ""
+}
+
+func isSecure(certPath, keyPath string) bool {
+	return certPath != "" && keyPath != ""
 }
