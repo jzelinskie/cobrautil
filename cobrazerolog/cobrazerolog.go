@@ -1,3 +1,5 @@
+// Package cobrahttp implements a builder for registering flags and producing
+// a Cobra RunFunc that configures Zerolog.
 package cobrazerolog
 
 import (
@@ -8,7 +10,6 @@ import (
 	"time"
 
 	"github.com/jzelinskie/cobrautil/v2"
-	"github.com/jzelinskie/stringz"
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/diode"
@@ -17,23 +18,24 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// ConfigureFunc is a function used to configure this CobraUtil
-type ConfigureFunc = func(cu *CobraUtil)
+// Option is function used to configure Zerolog within a Cobra RunFunc.
+type Option func(*Builder)
 
-// New creates a configuration that exposes RegisterZeroLogFlags and ZeroLogRunE
-// to integrate with cobra
-func New(configurations ...ConfigureFunc) *CobraUtil {
-	cu := CobraUtil{
+// New creates a Cobra RunFunc Builder for ZeroLog.
+func New(opts ...Option) *Builder {
+	b := &Builder{
+		flagPrefix:  "log",
 		preRunLevel: zerolog.InfoLevel,
 	}
-	for _, configure := range configurations {
-		configure(&cu)
+
+	for _, configure := range opts {
+		configure(b)
 	}
-	return &cu
+	return b
 }
 
-// CobraUtil carries the configuration for a zerolog CobraRunFunc
-type CobraUtil struct {
+// Builder is used to configure Zerolog via Cobra.
+type Builder struct {
 	flagPrefix        string
 	target            func(zerolog.Logger)
 	async             bool
@@ -42,38 +44,24 @@ type CobraUtil struct {
 	preRunLevel       zerolog.Level
 }
 
-// RegisterZeroLogFlags adds flags for use in with ZeroLogPreRunE:
+func (b *Builder) prefix(s string) string {
+	return cobrautil.PrefixJoiner(b.flagPrefix)(s)
+}
+
+// RegisterFlags adds flags for configuring Zerolog.
+//
+// The following flags are added:
 // - "$PREFIX-level"
 // - "$PREFIX-format"
-func RegisterZeroLogFlags(flags *pflag.FlagSet, flagPrefix string) {
-	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "log"))
-	flags.String(prefixed("level"), "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
-	flags.String(prefixed("format"), "auto", `format of logs ("auto", "console", "json")`)
+func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
+	flags.String(b.prefix("level"), "info", `verbosity of logging ("trace", "debug", "info", "warn", "error")`)
+	flags.String(b.prefix("format"), "auto", `format of logs ("auto", "console", "json")`)
 }
 
-// RunE returns a Cobra run func that configures the corresponding
-// log level from a command.
+// RunE returns a Cobra RunFunc that configures Zerolog.
 //
-// The required flags can be added to a command by using
-// RegisterLoggingPersistentFlags().
-func RunE(flagPrefix string, prerunLevel zerolog.Level) cobrautil.CobraRunFunc {
-	return New(WithFlagPrefix(flagPrefix), WithPreRunLevel(prerunLevel)).RunE()
-}
-
-// RegisterFlags adds flags for use in with ZeroLogPreRunE:
-// - "$PREFIX-level"
-// - "$PREFIX-format"
-func (cu CobraUtil) RegisterFlags(flags *pflag.FlagSet) {
-	RegisterZeroLogFlags(flags, cu.flagPrefix)
-}
-
-// RunE returns a Cobra run func that configures the corresponding
-// log level from a command.
-//
-// The required flags can be added to a command by using
-// RegisterLoggingPersistentFlags().
-func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
-	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(cu.flagPrefix, "log"))
+// The required flags can be added to a command by using RegisterFlags().
+func (b *Builder) RunE() cobrautil.CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		if cobrautil.IsBuiltinCommand(cmd) {
 			return nil // No-op for builtins
@@ -81,14 +69,14 @@ func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
 
 		var output io.Writer
 
-		format := cobrautil.MustGetString(cmd, prefixed("format"))
+		format := cobrautil.MustGetString(cmd, b.prefix("format"))
 		if format == "console" || format == "auto" && isatty.IsTerminal(os.Stdout.Fd()) {
 			output = zerolog.ConsoleWriter{Out: os.Stderr}
 		} else {
 			output = os.Stderr
 		}
 
-		if cu.async {
+		if b.async {
 			output = diode.NewWriter(output, 1000, 10*time.Millisecond, func(missed int) {
 				fmt.Printf("Logger Dropped %d messages", missed)
 			})
@@ -96,7 +84,7 @@ func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
 
 		l := zerolog.New(output).With().Timestamp().Logger()
 
-		level := strings.ToLower(cobrautil.MustGetString(cmd, prefixed("level")))
+		level := strings.ToLower(cobrautil.MustGetString(cmd, b.prefix("level")))
 		switch level {
 		case "trace":
 			l = l.Level(zerolog.TraceLevel)
@@ -116,49 +104,48 @@ func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
 			return fmt.Errorf("unknown log level: %s", level)
 		}
 
-		if cu.target != nil {
-			cu.target(l)
+		if b.target != nil {
+			b.target(l)
 		} else {
 			log.Logger = l
 		}
 
-		l.WithLevel(cu.preRunLevel).
+		l.WithLevel(b.preRunLevel).
 			Str("format", format).
 			Str("log_level", level).
 			Str("provider", "zerolog").
-			Bool("async", cu.async).
+			Bool("async", b.async).
 			Msg("configured logging")
 		return nil
 	}
 }
 
-// WithFlagPrefix defines prefix used with the generated flags. Defaults to "log".
-func WithFlagPrefix(flagPrefix string) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.flagPrefix = flagPrefix
-	}
+// WithFlagPrefix defines prefix used with the generated flags.
+// Defaults to "log".
+func WithFlagPrefix(flagPrefix string) Option {
+	return func(b *Builder) { b.flagPrefix = flagPrefix }
 }
 
-// WithPreRunLevel defines the logging level used for pre-run log messages. Debug by default.
-func WithPreRunLevel(preRunLevel zerolog.Level) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.preRunLevel = preRunLevel
-	}
+// WithPreRunLevel defines the logging level used for pre-run log messages.
+// Defaults to "debug".
+func WithPreRunLevel(preRunLevel zerolog.Level) Option {
+	return func(b *Builder) { b.preRunLevel = preRunLevel }
 }
 
-// WithAsync enables non-blocking logging. Size of the buffer and polling interval can be configured.
+// WithAsync enables non-blocking logging.
+//
+// Size of the buffer and polling interval can be configured.
 // Disabled by default.
-func WithAsync(size int, pollInterval time.Duration) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.async = true
-		cu.asyncSize = size
-		cu.asyncPollInterval = pollInterval
+func WithAsync(size int, pollInterval time.Duration) Option {
+	return func(b *Builder) {
+		b.async = true
+		b.asyncSize = size
+		b.asyncPollInterval = pollInterval
 	}
 }
 
-// WithTarget callback that forwards the configured logger. Useful when we want to keep it in a global variable.
-func WithTarget(fn func(zerolog.Logger)) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.target = fn
-	}
+// WithTarget callback that forwards the configured logger.
+// Useful when we want to keep it in a global variable.
+func WithTarget(fn func(zerolog.Logger)) Option {
+	return func(b *Builder) { b.target = fn }
 }

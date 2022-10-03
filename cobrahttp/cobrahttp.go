@@ -1,3 +1,5 @@
+// Package cobrahttp implements a builder for registering flags and producing
+// a Cobra RunFunc that configures an HTTP server.
 package cobrahttp
 
 import (
@@ -12,13 +14,12 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// ConfigureFunc is a function used to configure this CobraUtil
-type ConfigureFunc = func(cu *CobraUtil)
+// Option is function used to configure an HTTP server within a Cobra RunFunc.
+type Option func(b *Builder)
 
-// New creates a configuration that exposes RegisterFlags and RunE
-// to integrate with cobra
-func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
-	cu := CobraUtil{
+// New creates a Cobra RunFunc Builder for an HTTP server.
+func New(serviceName string, opts ...Option) *Builder {
+	b := &Builder{
 		serviceName:    stringz.DefaultEmpty(serviceName, "http"),
 		preRunLevel:    0,
 		logger:         logr.Discard(),
@@ -26,14 +27,14 @@ func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
 		defaultEnabled: false,
 		flagPrefix:     "http",
 	}
-	for _, configure := range configurations {
-		configure(&cu)
+	for _, configure := range opts {
+		configure(b)
 	}
-	return &cu
+	return b
 }
 
-// CobraUtil carries the configuration for a otel CobraRunFunc
-type CobraUtil struct {
+// Builder is used to configure an HTTP server via Cobra.
+type Builder struct {
 	flagPrefix     string
 	serviceName    string
 	defaultAddr    string
@@ -43,84 +44,65 @@ type CobraUtil struct {
 	handler        http.Handler
 }
 
-// RegisterHTTPServerFlags adds the following flags for use with
-// HttpServerFromFlags:
+func (b *Builder) prefix(s string) string {
+	return cobrautil.PrefixJoiner(b.flagPrefix)(s)
+}
+
+// RegisterFlags adds flags for configuring an HTTP server.
+//
+// The following flags are added:
 // - "$PREFIX-addr"
 // - "$PREFIX-tls-cert-path"
 // - "$PREFIX-tls-key-path"
 // - "$PREFIX-enabled"
-func RegisterHTTPServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
-	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":8443")
-	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "http"))
-
-	flags.String(prefixed("addr"), defaultAddr, "address to listen on to serve "+serviceName)
-	flags.String(prefixed("tls-cert-path"), "", "local path to the TLS certificate used to serve "+serviceName)
-	flags.String(prefixed("tls-key-path"), "", "local path to the TLS key used to serve "+serviceName)
-	flags.Bool(prefixed("enabled"), defaultEnabled, "enable "+serviceName+" http server")
+func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
+	flags.String(b.prefix("addr"), b.defaultAddr, "address to listen on to serve "+b.serviceName)
+	flags.String(b.prefix("tls-cert-path"), "", "local path to the TLS certificate used to serve "+b.serviceName)
+	flags.String(b.prefix("tls-key-path"), "", "local path to the TLS key used to serve "+b.serviceName)
+	flags.Bool(b.prefix("enabled"), b.defaultEnabled, "enable "+b.serviceName+" http server")
 }
 
 // ServerFromFlags creates an *http.Server as configured by the flags from
-// RegisterHttpServerFlags().
-func ServerFromFlags(cmd *cobra.Command, flagPrefix string) *http.Server {
-	return New("", WithFlagPrefix(flagPrefix)).ServerFromFlags(cmd)
-}
-
-// ListenFromFlags listens on an HTTP server using the configuration stored
-// in the cobra command that was registered with RegisterHttpServerFlags.
-func ListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *http.Server, preRunLevel int) error {
-	return New("", WithFlagPrefix(flagPrefix), WithPreRunLevel(preRunLevel)).ListenWithServerFromFlags(cmd, srv)
-}
-
-// RegisterHTTPServerFlags adds the following flags for use with
-// HttpServerFromFlags:
-// - "$PREFIX-addr"
-// - "$PREFIX-tls-cert-path"
-// - "$PREFIX-tls-key-path"
-// - "$PREFIX-enabled"
-func (cu CobraUtil) RegisterHTTPServerFlags(flags *pflag.FlagSet) {
-	RegisterHTTPServerFlags(flags, cu.flagPrefix, cu.serviceName, cu.defaultAddr, cu.defaultEnabled)
-}
-
-// ServerFromFlags creates an *http.Server as configured by the flags from
-// RegisterHttpServerFlags().
-func (cu CobraUtil) ServerFromFlags(cmd *cobra.Command) *http.Server {
-	prefixed := cobrautil.PrefixJoiner(cu.flagPrefix)
-
+// RegisterFlags().
+func (b *Builder) ServerFromFlags(cmd *cobra.Command) *http.Server {
 	return &http.Server{
-		Addr:    cobrautil.MustGetStringExpanded(cmd, prefixed("addr")),
-		Handler: cu.handler,
+		Addr:    cobrautil.MustGetStringExpanded(cmd, b.prefix("addr")),
+		Handler: b.handler,
 	}
 }
 
-// ListenWithServerFromFlags listens on the provided HTTP server using the configuration stored
-// in the cobra command that was registered with RegisterHttpServerFlags.
-func (cu CobraUtil) ListenWithServerFromFlags(cmd *cobra.Command, srv *http.Server) error {
-	prefixed := cobrautil.PrefixJoiner(cu.flagPrefix)
-	if !cobrautil.MustGetBool(cmd, prefixed("enabled")) {
+// ListenFromFlags listens on the provided HTTP server using values configured
+// in the provided command.
+func (b *Builder) ListenFromFlags(cmd *cobra.Command, srv *http.Server) error {
+	if !cobrautil.MustGetBool(cmd, b.prefix("enabled")) {
 		return nil
 	}
 
-	certPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
-	keyPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-key-path"))
+	certPath := cobrautil.MustGetStringExpanded(cmd, b.prefix("tls-cert-path"))
+	keyPath := cobrautil.MustGetStringExpanded(cmd, b.prefix("tls-key-path"))
 
 	switch {
 	case certPath == "" && keyPath == "":
-		cu.logger.V(cu.preRunLevel).Info("http server started serving",
+		b.logger.V(b.preRunLevel).Info(
+			"http server started serving",
 			"addr", srv.Addr,
-			"prefix", cu.flagPrefix,
+			"prefix", b.flagPrefix,
 			"scheme", "http",
-			"insecure", "true")
+			"insecure", "true",
+		)
 		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("failed while serving http: %w", err)
 		}
 		return nil
 
 	case certPath != "" && keyPath != "":
-		cu.logger.V(cu.preRunLevel).Info("http server started serving",
+		b.logger.V(b.preRunLevel).Info(
+			"http server started serving",
 			"addr", srv.Addr,
-			"prefix", cu.flagPrefix,
+			"prefix", b.flagPrefix,
 			"scheme", "https",
-			"insecure", "false")
+			"insecure", "false",
+		)
 		if err := srv.ListenAndServeTLS(certPath, keyPath); err != nil && errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("failed while serving https: %w", err)
 		}
@@ -129,52 +111,49 @@ func (cu CobraUtil) ListenWithServerFromFlags(cmd *cobra.Command, srv *http.Serv
 	default:
 		return fmt.Errorf(
 			"failed to start http server: must provide both --%s-tls-cert-path and --%s-tls-key-path",
-			cu.flagPrefix,
-			cu.flagPrefix,
+			b.flagPrefix,
+			b.flagPrefix,
 		)
 	}
 }
 
-// WithLogger defines the logger used to log messages in this package
-func WithLogger(logger logr.Logger) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.logger = logger
-	}
+// WithLogger configures logging of the configured HTTP server environment.
+func WithLogger(logger logr.Logger) Option {
+	return func(b *Builder) { b.logger = logger }
 }
 
-// WithDefaultAddress defines the default value of the address the server will listen at.
+// WithDefaultAddress configures the default value of the address the server
+// will listen at.
+//
 // Defaults to ":8443"
-func WithDefaultAddress(addr string) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.defaultAddr = addr
-	}
+func WithDefaultAddress(addr string) Option {
+	return func(b *Builder) { b.defaultAddr = addr }
 }
 
-// WithDefaultEnabled defines whether the http server is enabled by default. Defaults to "false".
-func WithDefaultEnabled(enabled bool) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.defaultEnabled = enabled
-	}
+// WithDefaultEnabled defines whether the server is enabled by default.
+//
+// Defaults to "false".
+func WithDefaultEnabled(enabled bool) Option {
+	return func(b *Builder) { b.defaultEnabled = enabled }
 }
 
-// WithFlagPrefix defines prefix used with the generated flags. Defaults to "http".
-func WithFlagPrefix(flagPrefix string) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.flagPrefix = flagPrefix
-	}
+// WithFlagPrefix defines prefix used with the generated flags.
+//
+// Defaults to "http".
+func WithFlagPrefix(flagPrefix string) Option {
+	return func(b *Builder) { b.flagPrefix = flagPrefix }
 }
 
-// WithPreRunLevel defines the logging level used for pre-run log messages. Defaults to "debug"..
-func WithPreRunLevel(preRunLevel int) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.preRunLevel = preRunLevel
-	}
+// WithPreRunLevel defines the logging level used for pre-run log messages.
+//
+// Defaults to "debug".
+func WithPreRunLevel(preRunLevel int) Option {
+	return func(b *Builder) { b.preRunLevel = preRunLevel }
 }
 
-// WithHandler defines the HTTP server handler to inject in the http.Server in ServerFromFlags method.
-// No handler is set by default. The value will be ignored in ListenFromFlags.
-func WithHandler(handler http.Handler) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.handler = handler
-	}
+// WithHandler defines the handler used by the http.Server.
+//
+// No handler is set by default.
+func WithHandler(handler http.Handler) Option {
+	return func(b *Builder) { b.handler = handler }
 }

@@ -1,3 +1,5 @@
+// Package cobragrpc implements a builder for registering flags and producing
+// a Cobra RunFunc that configures a gRPC server.
 package cobragrpc
 
 import (
@@ -16,13 +18,12 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
-// ConfigureFunc is a function used to configure this CobraUtil
-type ConfigureFunc = func(cu *CobraUtil)
+// Option is function used to configure a gRPC server within a Cobra RunFunc.
+type Option func(*Builder)
 
-// New creates a configuration that exposes RegisterFlags and RunE
-// to integrate with cobra
-func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
-	cu := CobraUtil{
+// New creates a Cobra RunFunc Builder for a gRPC server.
+func New(serviceName string, opts ...Option) *Builder {
+	b := &Builder{
 		serviceName:    stringz.DefaultEmpty(serviceName, "grpc"),
 		preRunLevel:    0,
 		logger:         logr.Discard(),
@@ -30,14 +31,14 @@ func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
 		defaultEnabled: false,
 		flagPrefix:     "grpc",
 	}
-	for _, configure := range configurations {
-		configure(&cu)
+	for _, configure := range opts {
+		configure(b)
 	}
-	return &cu
+	return b
 }
 
-// CobraUtil carries the configuration for a otel CobraRunFunc
-type CobraUtil struct {
+// Builder is used to configure a gRPC server via Cobra.
+type Builder struct {
 	flagPrefix     string
 	serviceName    string
 	defaultAddr    string
@@ -46,52 +47,35 @@ type CobraUtil struct {
 	preRunLevel    int
 }
 
-// RegisterGrpcServerFlags adds the following flags for use with
-// GrpcServerFromFlags:
+func (b *Builder) prefix(s string) string {
+	return cobrautil.PrefixJoiner(b.flagPrefix)(s)
+}
+
+// RegisterFlags adds flags for configuring a gRPC server.
+//
+// The following flags are added:
 // - "$PREFIX-addr"
 // - "$PREFIX-tls-cert-path"
 // - "$PREFIX-tls-key-path"
 // - "$PREFIX-max-conn-age"
-func RegisterGrpcServerFlags(flags *pflag.FlagSet, flagPrefix, serviceName, defaultAddr string, defaultEnabled bool) {
-	serviceName = stringz.DefaultEmpty(serviceName, "grpc")
-	defaultAddr = stringz.DefaultEmpty(defaultAddr, ":50051")
-	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "grpc"))
-
-	flags.String(prefixed("addr"), defaultAddr, "address to listen on to serve "+serviceName)
-	flags.String(prefixed("network"), "tcp", "network type to serve "+serviceName+` ("tcp", "tcp4", "tcp6", "unix", "unixpacket")`)
-	flags.String(prefixed("tls-cert-path"), "", "local path to the TLS certificate used to serve "+serviceName)
-	flags.String(prefixed("tls-key-path"), "", "local path to the TLS key used to serve "+serviceName)
-	flags.Duration(prefixed("max-conn-age"), 30*time.Second, "how long a connection serving "+serviceName+" should be able to live")
-	flags.Bool(prefixed("enabled"), defaultEnabled, "enable "+serviceName+" gRPC server")
-}
-
-// RegisterGrpcServerFlags adds the following flags for use with
-// GrpcServerFromFlags:
-// - "$PREFIX-addr"
-// - "$PREFIX-tls-cert-path"
-// - "$PREFIX-tls-key-path"
-// - "$PREFIX-max-conn-age"
-func (cu CobraUtil) RegisterGrpcServerFlags(flags *pflag.FlagSet) {
-	RegisterGrpcServerFlags(flags, cu.flagPrefix, cu.serviceName, cu.defaultAddr, cu.defaultEnabled)
+func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
+	flags.String(b.prefix("addr"), b.defaultAddr, "address to listen on to serve "+b.serviceName)
+	flags.String(b.prefix("network"), "tcp", "network type to serve "+b.serviceName+` ("tcp", "tcp4", "tcp6", "unix", "unixpacket")`)
+	flags.String(b.prefix("tls-cert-path"), "", "local path to the TLS certificate used to serve "+b.serviceName)
+	flags.String(b.prefix("tls-key-path"), "", "local path to the TLS key used to serve "+b.serviceName)
+	flags.Duration(b.prefix("max-conn-age"), 30*time.Second, "how long a connection serving "+b.serviceName+" should be able to live")
+	flags.Bool(b.prefix("enabled"), b.defaultEnabled, "enable "+b.serviceName+" gRPC server")
 }
 
 // ServerFromFlags creates an *grpc.Server as configured by the flags from
-// RegisterGrpcServerFlags().
-func ServerFromFlags(cmd *cobra.Command, flagPrefix string, opts ...grpc.ServerOption) (*grpc.Server, error) {
-	return New("", WithFlagPrefix(flagPrefix)).ServerFromFlags(cmd, opts...)
-}
-
-// ServerFromFlags creates an *grpc.Server as configured by the flags from
-// RegisterGrpcServerFlags().
-func (cu CobraUtil) ServerFromFlags(cmd *cobra.Command, opts ...grpc.ServerOption) (*grpc.Server, error) {
-	prefixed := cobrautil.PrefixJoiner(cu.flagPrefix)
-
+// RegisterFlags().
+func (b *Builder) ServerFromFlags(cmd *cobra.Command, opts ...grpc.ServerOption) (*grpc.Server, error) {
 	opts = append(opts, grpc.KeepaliveParams(keepalive.ServerParameters{
-		MaxConnectionAge: cobrautil.MustGetDuration(cmd, prefixed("max-conn-age")),
+		MaxConnectionAge: cobrautil.MustGetDuration(cmd, b.prefix("max-conn-age")),
 	}))
 
-	certPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
-	keyPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-key-path"))
+	certPath := cobrautil.MustGetStringExpanded(cmd, b.prefix("tls-cert-path"))
+	keyPath := cobrautil.MustGetStringExpanded(cmd, b.prefix("tls-key-path"))
 
 	switch {
 	case isInsecure(certPath, keyPath):
@@ -108,43 +92,36 @@ func (cu CobraUtil) ServerFromFlags(cmd *cobra.Command, opts ...grpc.ServerOptio
 	default:
 		return nil, fmt.Errorf(
 			"failed to start gRPC server: must provide both --%s-tls-cert-path and --%s-tls-key-path",
-			cu.flagPrefix,
-			cu.flagPrefix,
+			b.flagPrefix,
+			b.flagPrefix,
 		)
 	}
 }
 
-// ListenFromFlags listens on an gRPC server using the configuration stored
-// in the cobra command that was registered with RegisterGrpcServerFlags.
-func ListenFromFlags(cmd *cobra.Command, flagPrefix string, srv *grpc.Server, preRunLevel int) error {
-	return New("", WithPreRunLevel(preRunLevel), WithFlagPrefix(flagPrefix)).ListenFromFlags(cmd, srv)
-}
-
-// ListenFromFlags listens on an gRPC server using the configuration stored
-// in the cobra command that was registered with RegisterGrpcServerFlags.
-func (cu CobraUtil) ListenFromFlags(cmd *cobra.Command, srv *grpc.Server) error {
-	prefixed := cobrautil.PrefixJoiner(cu.flagPrefix)
-
-	if !cobrautil.MustGetBool(cmd, prefixed("enabled")) {
+// ListenFromFlags listens on the provided gRPC server using values configured
+// in the provided command.
+func (b *Builder) ListenFromFlags(cmd *cobra.Command, srv *grpc.Server) error {
+	if !cobrautil.MustGetBool(cmd, b.prefix("enabled")) {
 		return nil
 	}
 
-	network := cobrautil.MustGetString(cmd, prefixed("network"))
-	addr := cobrautil.MustGetStringExpanded(cmd, prefixed("addr"))
+	network := cobrautil.MustGetString(cmd, b.prefix("network"))
+	addr := cobrautil.MustGetStringExpanded(cmd, b.prefix("addr"))
 
 	l, err := net.Listen(network, addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on addr for gRPC server: %w", err)
 	}
 
-	certPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-cert-path"))
-	keyPath := cobrautil.MustGetStringExpanded(cmd, prefixed("tls-key-path"))
-	cu.logger.V(cu.preRunLevel).Info(
+	certPath := cobrautil.MustGetStringExpanded(cmd, b.prefix("tls-cert-path"))
+	keyPath := cobrautil.MustGetStringExpanded(cmd, b.prefix("tls-key-path"))
+	b.logger.V(b.preRunLevel).Info(
 		"grpc server started listening",
 		"addr", addr,
 		"network", network,
-		"prefix", cu.flagPrefix,
-		"insecure", isInsecure(certPath, keyPath))
+		"prefix", b.flagPrefix,
+		"insecure", isInsecure(certPath, keyPath),
+	)
 
 	if err := srv.Serve(l); err != nil {
 		return fmt.Errorf("failed to serve gRPC: %w", err)
@@ -153,46 +130,44 @@ func (cu CobraUtil) ListenFromFlags(cmd *cobra.Command, srv *grpc.Server) error 
 	return nil
 }
 
-// WithLogger defines the logger used to log messages in this package
-func WithLogger(logger logr.Logger) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.logger = logger
-	}
-}
-
-// WithDefaultAddress defines the default value of the address the server will listen at.
-// Defaults to ":50051"
-func WithDefaultAddress(addr string) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.defaultAddr = addr
-	}
-}
-
-// WithDefaultEnabled defines whether the gRPC server is enabled by default. Defaults to "false".
-func WithDefaultEnabled(enabled bool) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.defaultEnabled = enabled
-	}
-}
-
-// WithFlagPrefix defines prefix used with the generated flags. Defaults to "grpc".
-func WithFlagPrefix(flagPrefix string) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.flagPrefix = flagPrefix
-	}
-}
-
-// WithPreRunLevel defines the logging level used for pre-run log messages. Defaults to "debug".
-func WithPreRunLevel(preRunLevel int) ConfigureFunc {
-	return func(cu *CobraUtil) {
-		cu.preRunLevel = preRunLevel
-	}
-}
-
 func isInsecure(certPath, keyPath string) bool {
 	return certPath == "" && keyPath == ""
 }
 
 func isSecure(certPath, keyPath string) bool {
 	return certPath != "" && keyPath != ""
+}
+
+// WithLogger configures logging of the configured gRPC server environment.
+func WithLogger(logger logr.Logger) Option {
+	return func(b *Builder) { b.logger = logger }
+}
+
+// WithDefaultAddress configures the default value of the address the server
+// will listen at.
+//
+// Defaults to ":50051"
+func WithDefaultAddress(addr string) Option {
+	return func(b *Builder) { b.defaultAddr = addr }
+}
+
+// WithDefaultEnabled defines whether the server is enabled by default.
+//
+// Defaults to "false".
+func WithDefaultEnabled(enabled bool) Option {
+	return func(b *Builder) { b.defaultEnabled = enabled }
+}
+
+// WithFlagPrefix defines prefix used with the generated flags.
+//
+// Defaults to "grpc".
+func WithFlagPrefix(flagPrefix string) Option {
+	return func(b *Builder) { b.flagPrefix = flagPrefix }
+}
+
+// WithPreRunLevel defines the logging level used for pre-run log messages.
+//
+// Defaults to "debug".
+func WithPreRunLevel(preRunLevel int) Option {
+	return func(b *Builder) { b.preRunLevel = preRunLevel }
 }
