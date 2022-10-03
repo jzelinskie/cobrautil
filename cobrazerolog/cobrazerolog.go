@@ -1,4 +1,4 @@
-package zerolog
+package cobrazerolog
 
 import (
 	"fmt"

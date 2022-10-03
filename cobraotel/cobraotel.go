@@ -1,4 +1,4 @@
-package otel
+package cobraotel
 
 import (
 	"context"
