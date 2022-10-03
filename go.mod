@@ -1,8 +1,9 @@
-module github.com/jzelinskie/cobrautil
+module github.com/jzelinskie/cobrautil/v2
 
 go 1.18
 
 require (
+	github.com/go-logr/logr v1.2.3
 	github.com/jzelinskie/stringz v0.0.1
 	github.com/mattn/go-isatty v0.0.16
 	github.com/rs/zerolog v1.28.0
@@ -23,7 +24,6 @@ require (
 require (
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect

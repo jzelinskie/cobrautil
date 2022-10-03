@@ -1,4 +1,4 @@
-package cobrautil
+package otel
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/go-logr/logr"
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/jzelinskie/stringz"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/contrib/propagators/b3"
@@ -25,6 +25,31 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 )
 
+// ConfigureFunc is a function used to configure this CobraUtil
+type ConfigureFunc = func(cu *CobraUtil)
+
+// New creates a configuration that exposes RegisterFlags and RunE
+// to integrate with cobra
+func New(serviceName string, configurations ...ConfigureFunc) *CobraUtil {
+	cu := CobraUtil{
+		serviceName: serviceName,
+		preRunLevel: 0,
+		logger:      logr.Discard(),
+	}
+	for _, configure := range configurations {
+		configure(&cu)
+	}
+	return &cu
+}
+
+// CobraUtil carries the configuration for a otel CobraRunFunc
+type CobraUtil struct {
+	flagPrefix  string
+	serviceName string
+	logger      logr.Logger
+	preRunLevel int
+}
+
 // RegisterOpenTelemetryFlags adds the following flags for use with
 // OpenTelemetryPreRunE:
 // - "$PREFIX-provider"
@@ -33,7 +58,7 @@ import (
 func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName string) {
 	bi, _ := debug.ReadBuildInfo()
 	serviceName = stringz.DefaultEmpty(serviceName, bi.Main.Path)
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
 
 	flags.String(prefixed("provider"), "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
 	flags.String(prefixed("endpoint"), "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
@@ -56,19 +81,41 @@ func RegisterOpenTelemetryFlags(flags *pflag.FlagSet, flagPrefix, serviceName st
 // corresponding otel provider from a command.
 //
 // The required flags can be added to a command by using
+// RegisterOpenTelemetryFlags()
+func OpenTelemetryRunE(flagPrefix, serviceName string, preRunLevel int) cobrautil.CobraRunFunc {
+	return New(serviceName, WithFlagPrefix(flagPrefix), WithPreRunLevel(preRunLevel)).RunE()
+}
+
+// RegisterFlags adds the following flags for use with
+// OpenTelemetryPreRunE:
+// - "$PREFIX-provider"
+// - "$PREFIX-endpoint"
+// - "$PREFIX-service-name"
+func (cu CobraUtil) RegisterFlags(flags *pflag.FlagSet) {
+	RegisterOpenTelemetryFlags(flags, cu.flagPrefix, cu.serviceName)
+}
+
+// RunE returns a Cobra run func that configures the
+// corresponding otel provider from a command.
+//
+// The required flags can be added to a command by using
 // RegisterOpenTelemetryFlags().
-func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFunc {
-	prefixed := prefixJoiner(stringz.DefaultEmpty(flagPrefix, "otel"))
+func (cu CobraUtil) RunE() cobrautil.CobraRunFunc {
+	prefixed := cobrautil.PrefixJoiner(stringz.DefaultEmpty(cu.flagPrefix, "otel"))
 	return func(cmd *cobra.Command, args []string) error {
-		if IsBuiltinCommand(cmd) {
+		if cobrautil.IsBuiltinCommand(cmd) {
 			return nil // No-op for builtins
 		}
 
-		provider := strings.ToLower(MustGetString(cmd, prefixed("provider")))
-		serviceName := MustGetString(cmd, prefixed("service-name"))
-		endpoint := MustGetString(cmd, prefixed("endpoint"))
-		insecure := MustGetBool(cmd, prefixed("insecure"))
-		propagators := strings.Split(MustGetString(cmd, prefixed("trace-propagator")), ",")
+		provider := strings.ToLower(cobrautil.MustGetString(cmd, prefixed("provider")))
+		serviceName := cobrautil.MustGetString(cmd, prefixed("service-name"))
+		endpoint := cobrautil.MustGetString(cmd, prefixed("endpoint"))
+		insecure := cobrautil.MustGetBool(cmd, prefixed("insecure"))
+		propagators := strings.Split(cobrautil.MustGetString(cmd, prefixed("trace-propagator")), ",")
+		var noLogger logr.Logger
+		if cu.logger != noLogger {
+			otel.SetLogger(cu.logger)
+		}
 
 		var exporter trace.SpanExporter
 		var err error
@@ -82,8 +129,8 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			// Nothing.
 		case "jaeger":
 			// Legacy flags! Will eventually be dropped!
-			endpoint = stringz.DefaultEmpty(endpoint, MustGetString(cmd, "otel-jaeger-endpoint"))
-			serviceName = stringz.Default(serviceName, MustGetString(cmd, "otel-jaeger-service-name"), "", cmd.Flags().Lookup(prefixed("service-name")).DefValue)
+			endpoint = stringz.DefaultEmpty(endpoint, cobrautil.MustGetString(cmd, "otel-jaeger-endpoint"))
+			serviceName = stringz.Default(serviceName, cobrautil.MustGetString(cmd, "otel-jaeger-service-name"), "", cmd.Flags().Lookup(prefixed("service-name")).DefValue)
 
 			var opts []jaeger.CollectorEndpointOption
 
@@ -143,14 +190,33 @@ func OpenTelemetryRunE(flagPrefix string, prerunLevel zerolog.Level) CobraRunFun
 			return fmt.Errorf("unknown tracing provider: %s", provider)
 		}
 
-		log.
-			WithLevel(prerunLevel).
-			Str("provider", provider).
-			Str("endpoint", endpoint).
-			Str("service", serviceName).
-			Bool("insecure", insecure).
-			Msg("setup opentelemetry tracing")
+		cu.logger.V(cu.preRunLevel).
+			Info("configured opentelemetry tracing",
+				"provider", provider,
+				"endpoint", endpoint,
+				"service", serviceName,
+				"insecure", insecure)
 		return nil
+	}
+}
+
+func WithLogger(logger logr.Logger) ConfigureFunc {
+	return func(cu *CobraUtil) {
+		cu.logger = logger
+	}
+}
+
+// WithFlagPrefix defines prefix used with the generated flags. Defaults to "log".
+func WithFlagPrefix(flagPrefix string) ConfigureFunc {
+	return func(cu *CobraUtil) {
+		cu.flagPrefix = flagPrefix
+	}
+}
+
+// WithPreRunLevel defines the logging level used for pre-run log messages. Debug by default.
+func WithPreRunLevel(preRunLevel int) ConfigureFunc {
+	return func(cu *CobraUtil) {
+		cu.preRunLevel = preRunLevel
 	}
 }
 
