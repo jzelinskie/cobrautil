@@ -68,7 +68,7 @@ func (b *Builder) prefix(s string) string {
 // - "$PREFIX-endpoint"
 // - "$PREFIX-service-name"
 func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
-	flags.String(b.prefix("provider"), "none", `OpenTelemetry provider for tracing ("none", "jaeger, otlphttp", "otlpgrpc")`)
+	flags.String(b.prefix("provider"), "none", `OpenTelemetry provider for tracing ("none", "otlphttp", "otlpgrpc")`)
 	flags.String(b.prefix("endpoint"), "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
 	flags.String(b.prefix("service-name"), b.serviceName, "service name for trace data")
 	flags.String(b.prefix("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
