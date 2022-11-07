@@ -73,6 +73,16 @@ func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
 	flags.String(b.prefix("service-name"), b.serviceName, "service name for trace data")
 	flags.String(b.prefix("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
 	flags.Bool(b.prefix("insecure"), false, `connect to the OpenTelemetry collector in plaintext`)
+
+	// Legacy flags! Will eventually be dropped!
+	flags.String("otel-jaeger-endpoint", "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
+	if err := flags.MarkHidden("otel-jaeger-endpoint"); err != nil {
+		panic("failed to mark flag hidden: " + err.Error())
+	}
+	flags.String("otel-jaeger-service-name", b.serviceName, "service name for trace data")
+	if err := flags.MarkHidden("otel-jaeger-service-name"); err != nil {
+		panic("failed to mark flag hidden: " + err.Error())
+	}
 }
 
 // RunE returns a Cobra run func that configures the
@@ -108,6 +118,7 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 			// Nothing.
 		case "jaeger":
 			// Legacy flags! Will eventually be dropped!
+			b.logger.V(0).Info("jaeger provider is deprecated; migrate to OpenTelemetry")
 			endpoint = stringz.DefaultEmpty(endpoint, cobrautil.MustGetString(cmd, "otel-jaeger-endpoint"))
 			serviceName = stringz.Default(serviceName, cobrautil.MustGetString(cmd, "otel-jaeger-service-name"), "", cmd.Flags().Lookup(b.prefix("service-name")).DefValue)
 
