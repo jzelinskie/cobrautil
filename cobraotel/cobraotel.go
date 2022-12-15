@@ -73,6 +73,7 @@ func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
 	flags.String(b.prefix("service-name"), b.serviceName, "service name for trace data")
 	flags.String(b.prefix("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
 	flags.Bool(b.prefix("insecure"), false, `connect to the OpenTelemetry collector in plaintext`)
+	flags.Float64(b.prefix("sample-ratio"), 0.2, "ratio of traces that are sampled")
 
 	// Legacy flags! Will eventually be dropped!
 	flags.String("otel-jaeger-endpoint", "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
@@ -101,6 +102,7 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 		endpoint := cobrautil.MustGetString(cmd, b.prefix("endpoint"))
 		insecure := cobrautil.MustGetBool(cmd, b.prefix("insecure"))
 		propagators := strings.Split(cobrautil.MustGetString(cmd, b.prefix("trace-propagator")), ",")
+		sampleRatio := cobrautil.MustGetFloat64(cmd, b.prefix("sample-ratio"))
 		var noLogger logr.Logger
 		if b.logger != noLogger {
 			otel.SetLogger(b.logger)
@@ -140,7 +142,7 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 				return err
 			}
 
-			if err := initOtelTracer(exporter, serviceName, propagators); err != nil {
+			if err := initOtelTracer(exporter, serviceName, propagators, sampleRatio); err != nil {
 				return err
 			}
 		case "otlphttp":
@@ -156,7 +158,7 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 				return err
 			}
 
-			if err := initOtelTracer(exporter, serviceName, propagators); err != nil {
+			if err := initOtelTracer(exporter, serviceName, propagators, sampleRatio); err != nil {
 				return err
 			}
 		case "otlpgrpc":
@@ -173,7 +175,7 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 				return err
 			}
 
-			if err := initOtelTracer(exporter, serviceName, propagators); err != nil {
+			if err := initOtelTracer(exporter, serviceName, propagators, sampleRatio); err != nil {
 				return err
 			}
 		default:
@@ -186,12 +188,13 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 			"endpoint", endpoint,
 			"service", serviceName,
 			"insecure", insecure,
+			"sampleRatio", sampleRatio,
 		)
 		return nil
 	}
 }
 
-func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string) error {
+func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string, sampleRatio float64) error {
 	res, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)),
@@ -203,7 +206,7 @@ func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators
 	}
 
 	otel.SetTracerProvider(trace.NewTracerProvider(
-		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(sampleRatio))),
 		trace.WithBatcher(exporter),
 		trace.WithResource(res),
 	))
