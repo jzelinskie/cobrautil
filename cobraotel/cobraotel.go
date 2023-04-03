@@ -73,7 +73,7 @@ func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
 	flags.String(b.prefix("service-name"), b.serviceName, "service name for trace data")
 	flags.String(b.prefix("trace-propagator"), "w3c", `OpenTelemetry trace propagation format ("b3", "w3c", "ottrace"). Add multiple propagators separated by comma.`)
 	flags.Bool(b.prefix("insecure"), false, `connect to the OpenTelemetry collector in plaintext`)
-	flags.Float64(b.prefix("sample-ratio"), 0.2, "ratio of traces that are sampled")
+	flags.Float64(b.prefix("sample-ratio"), 0.01, "ratio of traces that are sampled")
 
 	// Legacy flags! Will eventually be dropped!
 	flags.String("otel-jaeger-endpoint", "", "OpenTelemetry collector endpoint - the endpoint can also be set by using enviroment variables")
