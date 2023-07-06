@@ -51,16 +51,18 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 	}
 }
 
-// SyncViperPreRunEWithFiles returns a Cobra run func that synchronizes
+// SyncViperDotEnvPreRunE returns a Cobra run func that synchronizes
 // Viper environment flags prefixed with the provided argument.
 //
 // If envfile is not an empty string, it should contain a path of a dotenv file.
+// In case of an empty string, ./.evn is loaded.
 // Viper will load environment variables from file with lower precedence,
 // than env of the process.
-func SyncViperPreRunEWithFile(prefix string, envfile string) CobraRunFunc {
-	if envfile != "" {
-		godotenv.Load(envfile)
+func SyncViperDotEnvPreRunE(prefix string, envfile string) CobraRunFunc {
+	if envfile == "" {
+		envfile = ".env"
 	}
+	godotenv.Load(envfile)
 	return SyncViperPreRunE(prefix)
 }
 
