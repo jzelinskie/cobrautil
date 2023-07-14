@@ -22,8 +22,8 @@ func IsBuiltinCommand(cmd *cobra.Command) bool {
 	)
 }
 
-// SyncViperPreRunE returns a Cobra run func that synchronizes Viper environment
-// flags prefixed with the provided argument.
+// SyncViperPreRunE returns a CobraRunFunc that synchronizes Viper environment
+// flags with the provided prefix.
 //
 // Thanks to Carolyn Van Slyck: https://github.com/carolynvs/stingoftheviper
 func SyncViperPreRunE(prefix string) CobraRunFunc {
@@ -51,19 +51,18 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 	}
 }
 
-// SyncViperDotEnvPreRunE returns a Cobra run func that synchronizes
-// Viper environment flags prefixed with the provided argument.
+// SyncViperDotEnvPreRunE returns a CobraRunFunc that loads a .dotenv file
+// before synchronizing Viper environment flags with the provided prefix.
 //
-// If envfile is not an empty string, it should contain a path of a dotenv file.
-// In case of an empty string, ./.evn is loaded.
-// Viper will load environment variables from file with lower precedence,
-// than env of the process.
-func SyncViperDotEnvPreRunE(prefix string, envfile string) CobraRunFunc {
-	if envfile == "" {
-		envfile = ".env"
+// If empty, envfilePath defaults to ".env".
+// The .dotenv file is loaded first before any additional Viper behavior.
+func SyncViperDotEnvPreRunE(prefix string, envfilePath string) CobraRunFunc {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := godotenv.Load(stringz.DefaultEmpty(envfilePath, ".env")); err != nil {
+			return err
+		}
+		return SyncViperPreRunE(prefix)(cmd, args)
 	}
-	godotenv.Load(envfile)
-	return SyncViperPreRunE(prefix)
 }
 
 // CobraRunFunc is the signature of cobra.Command RunFuncs.
