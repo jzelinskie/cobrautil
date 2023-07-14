@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/go-logr/logr v1.2.3
+	github.com/joho/godotenv v1.5.1
 	github.com/jzelinskie/stringz v0.0.1
 	github.com/mattn/go-isatty v0.0.16
 	github.com/rs/zerolog v1.28.0
