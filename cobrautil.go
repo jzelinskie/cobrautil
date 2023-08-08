@@ -57,12 +57,10 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 // If empty, envfilePath defaults to ".env".
 // The .dotenv file is loaded first before any additional Viper behavior.
 func SyncViperDotEnvPreRunE(prefix string, envfilePath string) CobraRunFunc {
-	return func(cmd *cobra.Command, args []string) error {
-		if err := godotenv.Load(stringz.DefaultEmpty(envfilePath, ".env")); err != nil {
-			return err
-		}
-		return SyncViperPreRunE(prefix)(cmd, args)
+	if err := godotenv.Load(stringz.DefaultEmpty(envfilePath, ".env")); err != nil {
+		fmt.Printf("Info: attempt to load env vars from config file at path: %s failed due to error: %s. Continue without loading it.\n", envfilePath, err)
 	}
+	return SyncViperPreRunE(prefix)
 }
 
 // CobraRunFunc is the signature of cobra.Command RunFuncs.
