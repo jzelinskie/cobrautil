@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/joho/godotenv"
 	"github.com/jzelinskie/stringz"
 	"github.com/spf13/cobra"
@@ -56,9 +57,13 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 //
 // If empty, envfilePath defaults to ".env".
 // The .dotenv file is loaded first before any additional Viper behavior.
-func SyncViperDotEnvPreRunE(prefix string, envfilePath string) CobraRunFunc {
+func SyncViperDotEnvPreRunE(prefix, envfilePath string, l logr.Logger) CobraRunFunc {
 	if err := godotenv.Load(stringz.DefaultEmpty(envfilePath, ".env")); err != nil {
-		fmt.Printf("Info: attempt to load env vars from config file at path: %s failed due to error: %s. Continue without loading it.\n", envfilePath, err)
+		l.Info(
+			"skipped loading dotenv",
+			"path", envfilePath,
+			"err", err,
+		)
 	}
 	return SyncViperPreRunE(prefix)
 }
