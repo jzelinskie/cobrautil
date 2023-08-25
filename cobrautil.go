@@ -59,7 +59,7 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 // The .dotenv file is loaded first before any additional Viper behavior.
 func SyncViperDotEnvPreRunE(prefix, envfilePath string, l logr.Logger) CobraRunFunc {
 	if err := godotenv.Load(stringz.DefaultEmpty(envfilePath, ".env")); err != nil {
-		l.Info(
+		l.V(2).Info(
 			"skipped loading dotenv",
 			"path", envfilePath,
 			"err", err,
