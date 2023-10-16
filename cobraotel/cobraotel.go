@@ -5,7 +5,6 @@ package cobraotel
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"runtime/debug"
 	"strings"
 
@@ -17,7 +16,6 @@ import (
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/contrib/propagators/ot"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -118,33 +116,6 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 		switch provider {
 		case "none":
 			// Nothing.
-		case "jaeger":
-			// Legacy flags! Will eventually be dropped!
-			b.logger.V(0).Info("jaeger provider is deprecated; migrate to OpenTelemetry")
-			endpoint = stringz.DefaultEmpty(endpoint, cobrautil.MustGetString(cmd, "otel-jaeger-endpoint"))
-			serviceName = stringz.Default(serviceName, cobrautil.MustGetString(cmd, "otel-jaeger-service-name"), "", cmd.Flags().Lookup(b.prefix("service-name")).DefValue)
-
-			var opts []jaeger.CollectorEndpointOption
-
-			if endpoint != "" {
-				parsed, err := url.Parse(endpoint)
-				if err != nil {
-					return fmt.Errorf("failed to parse endpoint: %w", err)
-				}
-				if (insecure && parsed.Scheme == "https") || (!insecure && parsed.Scheme == "http") {
-					return fmt.Errorf("endpoint schema is %s but insecure flag is set to %t", parsed.Scheme, insecure)
-				}
-				opts = append(opts, jaeger.WithEndpoint(endpoint))
-			}
-
-			exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(opts...))
-			if err != nil {
-				return err
-			}
-
-			if err := initOtelTracer(exporter, serviceName, propagators, sampleRatio); err != nil {
-				return err
-			}
 		case "otlphttp":
 			var opts []otlptracehttp.Option
 			if endpoint != "" {
