@@ -18,6 +18,13 @@ import (
 	"github.com/spf13/pflag"
 )
 
+func init() {
+	// override the `time` field name to not conflict with other existing `time` fields
+	// in logs.
+	// See: https://github.com/rs/zerolog/blob/1f50797d7d24e4cf3a6407203bd694f3d35de724/event.go#L643
+	zerolog.TimestampFieldName = "log-timestamp"
+}
+
 // Option is function used to configure Zerolog within a Cobra RunFunc.
 type Option func(*Builder)
 
