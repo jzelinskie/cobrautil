@@ -25,6 +25,10 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 )
 
+type contextKey string
+
+const TracerProviderContextKey contextKey = "otel-tracer-provider"
+
 // Option is function used to configure OpenTelemetry within a Cobra RunFunc.
 type Option func(*Builder)
 
@@ -106,6 +110,7 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 			otel.SetLogger(b.logger)
 		}
 
+		var tracerProvider *trace.TracerProvider
 		var exporter trace.SpanExporter
 		var err error
 
@@ -124,12 +129,13 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 			if insecure {
 				opts = append(opts, otlptracehttp.WithInsecure())
 			}
-			exporter, err = otlptrace.New(context.Background(), otlptracehttp.NewClient(opts...))
+			exporter, err = otlptrace.New(cmd.Context(), otlptracehttp.NewClient(opts...))
 			if err != nil {
 				return err
 			}
 
-			if err := initOtelTracer(exporter, serviceName, propagators, sampleRatio); err != nil {
+			tracerProvider, err = initOtelTracer(exporter, serviceName, propagators, sampleRatio)
+			if err != nil {
 				return err
 			}
 		case "otlpgrpc":
@@ -141,17 +147,20 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 				opts = append(opts, otlptracegrpc.WithInsecure())
 			}
 
-			exporter, err = otlptrace.New(context.Background(), otlptracegrpc.NewClient(opts...))
+			exporter, err = otlptrace.New(cmd.Context(), otlptracegrpc.NewClient(opts...))
 			if err != nil {
 				return err
 			}
 
-			if err := initOtelTracer(exporter, serviceName, propagators, sampleRatio); err != nil {
+			tracerProvider, err = initOtelTracer(exporter, serviceName, propagators, sampleRatio)
+			if err != nil {
 				return err
 			}
 		default:
 			return fmt.Errorf("unknown tracing provider: %s", provider)
 		}
+
+		cmd.SetContext(context.WithValue(cmd.Context(), TracerProviderContextKey, tracerProvider))
 
 		b.logger.V(b.preRunLevel).Info(
 			"configured opentelemetry tracing",
@@ -165,7 +174,7 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 	}
 }
 
-func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string, sampleRatio float64) error {
+func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators []string, sampleRatio float64) (*trace.TracerProvider, error) {
 	res, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(semconv.ServiceNameKey.String(serviceName)),
@@ -173,17 +182,18 @@ func initOtelTracer(exporter trace.SpanExporter, serviceName string, propagators
 		resource.WithTelemetrySDK(),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	otel.SetTracerProvider(trace.NewTracerProvider(
+	provider := trace.NewTracerProvider(
 		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(sampleRatio))),
 		trace.WithBatcher(exporter),
 		trace.WithResource(res),
-	))
+	)
+	otel.SetTracerProvider(provider)
 	setTracePropagators(propagators)
 
-	return nil
+	return provider, nil
 }
 
 // setTextMapPropagator sets the OpenTelemetry trace propagation format.
