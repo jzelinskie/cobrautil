@@ -63,6 +63,8 @@ func (b *Builder) prefix(s string) string {
 //
 // The following flags are added:
 // - "$PREFIX-provider"
+// - "$PREFIX-trace-propagator"
+// - "$PREFIX-insecure"
 // - "$PREFIX-endpoint"
 // - "$PREFIX-service-name"
 func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
@@ -82,6 +84,27 @@ func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
 	if err := flags.MarkHidden("otel-jaeger-service-name"); err != nil {
 		panic("failed to mark flag hidden: " + err.Error())
 	}
+}
+
+// RegisterFlagCompletion adds completion functions supported flags.
+//
+// The following flags are completed:
+// - "$PREFIX-provider"
+// - "$PREFIX-trace-propagator"
+func (b *Builder) RegisterFlagCompletion(cmd *cobra.Command) error {
+	if err := cmd.RegisterFlagCompletionFunc(b.prefix("provider"), func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"none", "otlphttp", "otlpgrpc"}, cobra.ShellCompDirectiveDefault
+	}); err != nil {
+		return err
+	}
+
+	if err := cmd.RegisterFlagCompletionFunc(b.prefix("trace-propagator"), func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"b3", "w3c", "ottrace"}, cobra.ShellCompDirectiveDefault
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // RunE returns a Cobra run func that configures the

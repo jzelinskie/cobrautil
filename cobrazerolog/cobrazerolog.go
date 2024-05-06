@@ -58,6 +58,27 @@ func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
 	flags.String(b.prefix("format"), "auto", `format of logs ("auto", "console", "json")`)
 }
 
+// RegisterFlagCompletion adds completion functions supported flags.
+//
+// The following flags are completed:
+// - "$PREFIX-level"
+// - "$PREFIX-format"
+func (b *Builder) RegisterFlagCompletion(cmd *cobra.Command) error {
+	if err := cmd.RegisterFlagCompletionFunc(b.prefix("level"), func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"trace", "debug", "info", "warn", "error"}, cobra.ShellCompDirectiveDefault
+	}); err != nil {
+		return err
+	}
+
+	if err := cmd.RegisterFlagCompletionFunc(b.prefix("format"), func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"auto", "console", "json"}, cobra.ShellCompDirectiveDefault
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // RunE returns a Cobra RunFunc that configures Zerolog.
 //
 // The required flags can be added to a command by using RegisterFlags().
