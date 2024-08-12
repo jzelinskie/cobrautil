@@ -10,12 +10,13 @@ import (
 	"go.uber.org/automaxprocs/maxprocs"
 )
 
-// SetLimitsRunE wraps the RunFunc with setup logic for memory limits and maxprocs
-// limits for the go process. It requests 90% of the memory available and respects
-// kubernetes cgroup limits, and requests all of the available CPU quota.
-// NOTE: this assumes that there is already a zerolog instance configured for the process
+// NOTE: Both of these assume that there is already a zerolog instance configured for the process
 // by the time this RunE is invoked.
-func SetLimitsRunE() CobraRunFunc {
+
+// SetLimitsRunE wraps the RunFunc with setup logic for memory limits
+// for the go process. It requests 90% of the memory available and respects
+// kubernetes cgroup limits.
+func SetMemLimitRunE() CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		// Need to invert the slog => zerolog map so that we can get the correct
 		// slog loglevel for memlimit logging
@@ -29,12 +30,6 @@ func SetLimitsRunE() CobraRunFunc {
 		logLevel := logLevelMap[logger.GetLevel()]
 
 		slogger := slog.New(slogzerolog.Option{Level: logLevel, Logger: logger}.NewZerologHandler())
-
-		undo, err := maxprocs.Set(maxprocs.Logger(zerolog.DefaultContextLogger.Printf))
-		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to set maxprocs")
-		}
-		defer undo()
 
 		_, _ = memlimit.SetGoMemLimitWithOpts(
 			memlimit.WithRatio(0.9),
@@ -50,3 +45,19 @@ func SetLimitsRunE() CobraRunFunc {
 		return nil
 	}
 }
+
+// SetProcLimitRunE wraps the RunFunc with setup logic for maxproc
+// limits for the go process. It requests all of the available CPU quota.
+func SetProcLimitRunE() CobraRunFunc {
+	return func(cmd *cobra.Command, args []string) error {
+		logger := zerolog.DefaultContextLogger
+
+		undo, err := maxprocs.Set(maxprocs.Logger(zerolog.DefaultContextLogger.Printf))
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to set maxprocs")
+		}
+		defer undo()
+		return nil
+	}
+}
+
