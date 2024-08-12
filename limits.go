@@ -11,7 +11,8 @@ import (
 )
 
 // SetLimitsRunE wraps the RunFunc with setup logic for memory limits and maxprocs
-// limits for the go process.
+// limits for the go process. It requests 90% of the memory available and respects
+// kubernetes cgroup limits, and requests all of the available CPU quota.
 // NOTE: this assumes that there is already a zerolog instance configured for the process
 // by the time this RunE is invoked.
 func SetLimitsRunE() CobraRunFunc {
