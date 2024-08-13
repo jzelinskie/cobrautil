@@ -3,8 +3,8 @@ package cobraproclimits
 import (
 	"log/slog"
 
-	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/KimMachineGun/automemlimit/memlimit"
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog/v2"
 	"github.com/spf13/cobra"
