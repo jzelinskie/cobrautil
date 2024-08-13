@@ -1,8 +1,9 @@
-package cobrautil
+package cobraproclimits
 
 import (
 	"log/slog"
 
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog/v2"
@@ -16,7 +17,7 @@ import (
 // SetLimitsRunE wraps the RunFunc with setup logic for memory limits
 // for the go process. It requests 90% of the memory available and respects
 // kubernetes cgroup limits.
-func SetMemLimitRunE() CobraRunFunc {
+func SetMemLimitRunE() cobrautil.CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		// Need to invert the slog => zerolog map so that we can get the correct
 		// slog loglevel for memlimit logging
@@ -48,7 +49,7 @@ func SetMemLimitRunE() CobraRunFunc {
 
 // SetProcLimitRunE wraps the RunFunc with setup logic for maxproc
 // limits for the go process. It requests all of the available CPU quota.
-func SetProcLimitRunE() CobraRunFunc {
+func SetProcLimitRunE() cobrautil.CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		logger := zerolog.DefaultContextLogger
 
