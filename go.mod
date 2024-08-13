@@ -1,6 +1,8 @@
 module github.com/jzelinskie/cobrautil/v2
 
-go 1.18
+go 1.21
+
+toolchain go1.22.2
 
 require (
 	github.com/KimMachineGun/automemlimit v0.6.1
