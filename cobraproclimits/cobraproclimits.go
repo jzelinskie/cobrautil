@@ -33,7 +33,6 @@ func SetMemLimitRunE(options ...memlimit.Option) cobrautil.CobraRunFunc {
 		slogger := slog.New(slogzerolog.Option{Level: logLevel, Logger: logger}.NewZerologHandler())
 
 		defaults := []memlimit.Option{
-			memlimit.WithRatio(1.0),
 			memlimit.WithProvider(
 				memlimit.ApplyFallback(
 					memlimit.FromCgroup,
