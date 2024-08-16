@@ -53,11 +53,10 @@ func SetProcLimitRunE() cobrautil.CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		logger := zerolog.DefaultContextLogger
 
-		undo, err := maxprocs.Set(maxprocs.Logger(zerolog.DefaultContextLogger.Printf))
+		_, err := maxprocs.Set(maxprocs.Logger(zerolog.DefaultContextLogger.Printf))
 		if err != nil {
 			logger.Fatal().Err(err).Msg("failed to set maxprocs")
 		}
-		defer undo()
 		return nil
 	}
 }
