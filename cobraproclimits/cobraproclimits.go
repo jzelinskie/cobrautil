@@ -17,7 +17,7 @@ import (
 // SetLimitsRunE wraps the RunFunc with setup logic for memory limits
 // for the go process. It requests 90% of the memory available and respects
 // kubernetes cgroup limits.
-func SetMemLimitRunE() cobrautil.CobraRunFunc {
+func SetMemLimitRunE(options ...memlimit.Option) cobrautil.CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		// Need to invert the slog => zerolog map so that we can get the correct
 		// slog loglevel for memlimit logging
@@ -32,8 +32,7 @@ func SetMemLimitRunE() cobrautil.CobraRunFunc {
 
 		slogger := slog.New(slogzerolog.Option{Level: logLevel, Logger: logger}.NewZerologHandler())
 
-		_, _ = memlimit.SetGoMemLimitWithOpts(
-			memlimit.WithRatio(0.9),
+		defaults := []memlimit.Option{
 			memlimit.WithProvider(
 				memlimit.ApplyFallback(
 					memlimit.FromCgroup,
@@ -41,6 +40,9 @@ func SetMemLimitRunE() cobrautil.CobraRunFunc {
 				),
 			),
 			memlimit.WithLogger(slogger),
+		}
+		_, _ = memlimit.SetGoMemLimitWithOpts(
+			append(defaults, options...)...,
 		)
 
 		return nil
