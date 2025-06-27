@@ -10,7 +10,7 @@ func ExampleCommandStack() {
 	_ = &cobra.Command{
 		Use: "mycmd",
 		RunE: cobrautil.CommandStack(
-			cobrautil.SyncViperPreRunE("myprogram"),
+			cobrautil.SyncEnvPreRunE("myprogram"),
 			func(cmd *cobra.Command, args []string) error {
 				return nil
 			},
