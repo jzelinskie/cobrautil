@@ -2,6 +2,7 @@ package cobrautil
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -9,7 +10,6 @@ import (
 	"github.com/jzelinskie/stringz"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 // IsBuiltinCommand checks against a hard-coded list of the names of commands
@@ -23,27 +23,18 @@ func IsBuiltinCommand(cmd *cobra.Command) bool {
 	)
 }
 
-// SyncViperPreRunE returns a CobraRunFunc that synchronizes Viper environment
-// flags with the provided prefix.
-//
-// Thanks to Carolyn Van Slyck: https://github.com/carolynvs/stingoftheviper
-func SyncViperPreRunE(prefix string) CobraRunFunc {
-	prefix = strings.ReplaceAll(strings.ToUpper(prefix), "-", "_")
+// SyncEnvPreRunE returns a CobraRunFunc that synchronizes environment
+// variables flags with the provided prefix.
+func SyncEnvPreRunE(prefix string) CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
 		if IsBuiltinCommand(cmd) {
 			return nil // No-op for builtins
 		}
 
-		v := viper.New()
-		v.AllowEmptyEnv(true)
-		viper.SetEnvPrefix(prefix)
-
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
-			suffix := strings.ToUpper(strings.ReplaceAll(f.Name, "-", "_"))
-			_ = v.BindEnv(f.Name, prefix+"_"+suffix)
-
-			if !f.Changed && v.IsSet(f.Name) {
-				val := v.Get(f.Name)
+			varName := strings.ToUpper(strings.ReplaceAll(prefix+"_"+f.Name, "-", "_"))
+			val, envIsSet := os.LookupEnv(varName)
+			if !f.Changed && envIsSet {
 				_ = cmd.Flags().Set(f.Name, fmt.Sprintf("%v", val))
 			}
 		})
@@ -52,12 +43,11 @@ func SyncViperPreRunE(prefix string) CobraRunFunc {
 	}
 }
 
-// SyncViperDotEnvPreRunE returns a CobraRunFunc that loads a .dotenv file
-// before synchronizing Viper environment flags with the provided prefix.
+// SyncDotEnvPreRunE returns a CobraRunFunc that loads a .dotenv file
+// before calling SyncDotEnvPreRunE.
 //
 // If empty, envfilePath defaults to ".env".
-// The .dotenv file is loaded first before any additional Viper behavior.
-func SyncViperDotEnvPreRunE(prefix, envfilePath string, l logr.Logger) CobraRunFunc {
+func SyncDotEnvPreRunE(prefix, envfilePath string, l logr.Logger) CobraRunFunc {
 	if err := godotenv.Load(stringz.DefaultEmpty(envfilePath, ".env")); err != nil {
 		l.V(2).Info(
 			"skipped loading dotenv",
@@ -65,7 +55,7 @@ func SyncViperDotEnvPreRunE(prefix, envfilePath string, l logr.Logger) CobraRunF
 			"err", err,
 		)
 	}
-	return SyncViperPreRunE(prefix)
+	return SyncEnvPreRunE(prefix)
 }
 
 // CobraRunFunc is the signature of cobra.Command RunFuncs.
