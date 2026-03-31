@@ -14,7 +14,7 @@ import (
 // NOTE: Both of these assume that there is already a zerolog instance configured for the process
 // by the time this RunE is invoked.
 
-// SetLimitsRunE wraps the RunFunc with setup logic for memory limits
+// SetMemLimitRunE wraps the RunFunc with setup logic for memory limits
 // for the go process. It requests 90% of the memory available and respects
 // kubernetes cgroup limits.
 func SetMemLimitRunE(options ...memlimit.Option) cobrautil.CobraRunFunc {

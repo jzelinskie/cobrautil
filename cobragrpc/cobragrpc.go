@@ -7,9 +7,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/jzelinskie/cobrautil/v2"
-
 	"github.com/go-logr/logr"
+	"github.com/jzelinskie/cobrautil/v2"
 	"github.com/jzelinskie/stringz"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"

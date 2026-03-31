@@ -2,7 +2,6 @@ package cobrazerolog_test
 
 import (
 	"github.com/jzelinskie/cobrautil/v2/cobrazerolog"
-
 	"github.com/spf13/cobra"
 )
 

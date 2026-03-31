@@ -59,7 +59,7 @@ type NamedFlagSets struct {
 // has to be registered globally, isn't overridden by any other NamedFlagSets.
 func (nfs *NamedFlagSets) templateFuncName() string {
 	if nfs.uniqueID == 0 {
-		nfs.uniqueID = rand.Int()
+		nfs.uniqueID = rand.Int() //nolint:gosec // don't care about being a weak random number generator
 	}
 	return fmt.Sprintf("namedFlagSets%d", nfs.uniqueID)
 }

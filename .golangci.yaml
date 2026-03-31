@@ -1,0 +1,50 @@
+---
+version: "2"
+run:
+  allow-parallel-runners: true
+linters:
+  enable:
+    - "bidichk"
+    - "bodyclose"
+    - "errcheck"
+    - "errname"
+    - "errorlint"
+    - "gocritic"
+    - "goprintffuncname"
+    - "gosec"
+    - "govet"
+    - "importas"
+    - "ineffassign"
+    - "makezero"
+    - "perfsprint"
+    - "prealloc"
+    - "predeclared"
+    - "promlinter"
+    - "spancheck"
+    - "staticcheck"
+    - "tagalign"
+    - "testifylint"
+    - "unparam"
+    - "unconvert"
+    - "usetesting"
+    - "wastedassign"
+    - "whitespace"
+    - "unused"
+  settings:
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1000" # at least one file in a package should have a package comment
+formatters:
+  enable:
+    - "gci"
+    - "gofmt"
+    - "gofumpt"
+    - "goimports"
+  settings:
+    gofmt:
+      rewrite-rules:
+        - pattern: "interface{}"
+          replacement: "any"
+        - pattern: "a[b:len(a)]"
+          replacement: "a[b:]"
