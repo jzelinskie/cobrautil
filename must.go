@@ -264,7 +264,7 @@ func MustGetStringSlice(cmd *cobra.Command, name string) []string {
 	return value
 }
 
-// MustGetStringSlice returns the []string value of a flag with the given name,
+// MustGetStringSliceExpanded returns the []string value of a flag with the given name,
 // calls os.ExpandEnv on values, and panics if that flag was never defined.
 func MustGetStringSliceExpanded(cmd *cobra.Command, name string) []string {
 	slice := MustGetStringSlice(cmd, name)

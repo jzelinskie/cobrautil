@@ -59,7 +59,7 @@ type NamedFlagSets struct {
 // has to be registered globally, isn't overridden by any other NamedFlagSets.
 func (nfs *NamedFlagSets) templateFuncName() string {
 	if nfs.uniqueID == 0 {
-		nfs.uniqueID = rand.Int()
+		nfs.uniqueID = rand.Int() //nolint:gosec // don't care about being a weak random number generator
 	}
 	return fmt.Sprintf("namedFlagSets%d", nfs.uniqueID)
 }
@@ -119,15 +119,15 @@ func (nfs *NamedFlagSets) printSections(w io.Writer, cols int) {
 		}
 
 		var buf bytes.Buffer
-		fmt.Fprintf(&buf, "\n%s Flags:\n%s", name, wideFS.FlagUsagesWrapped(cols))
+		_, _ = fmt.Fprintf(&buf, "\n%s Flags:\n%s", name, wideFS.FlagUsagesWrapped(cols))
 
 		if cols > 24 {
 			i := strings.Index(buf.String(), zzz)
 			lines := strings.Split(buf.String()[:i], "\n")
-			fmt.Fprint(w, strings.Join(lines[:len(lines)-1], "\n"))
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprint(w, strings.Join(lines[:len(lines)-1], "\n"))
+			_, _ = fmt.Fprintln(w)
 		} else {
-			fmt.Fprint(w, buf.String())
+			_, _ = fmt.Fprint(w, buf.String())
 		}
 	}
 }

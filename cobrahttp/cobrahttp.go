@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/jzelinskie/cobrautil/v2"
@@ -66,8 +67,9 @@ func (b *Builder) RegisterFlags(flags *pflag.FlagSet) {
 // RegisterFlags().
 func (b *Builder) ServerFromFlags(cmd *cobra.Command) *http.Server {
 	return &http.Server{
-		Addr:    cobrautil.MustGetStringExpanded(cmd, b.prefix("addr")),
-		Handler: b.handler,
+		Addr:              cobrautil.MustGetStringExpanded(cmd, b.prefix("addr")),
+		Handler:           b.handler,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 }
 

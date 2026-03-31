@@ -1,9 +1,8 @@
 package cobrautil_test
 
 import (
-	"github.com/spf13/cobra"
-
 	"github.com/jzelinskie/cobrautil/v2"
+	"github.com/spf13/cobra"
 )
 
 func ExampleCommandStack() {

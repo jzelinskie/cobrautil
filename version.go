@@ -29,7 +29,7 @@ func vcsRevision(bi *debug.BuildInfo) string {
 	revision = revision[:12] // Short SHA
 
 	if findBuildSetting(bi, "vcs.modified") == "true" {
-		revision = revision + "-dirty"
+		revision += "-dirty"
 	}
 
 	return revision
@@ -59,7 +59,7 @@ func UsageVersion(programName string, includeDeps bool) string {
 
 	if !includeDeps {
 		if Version == "(devel)" {
-			return fmt.Sprintf("%s development build (unknown exact version)", programName)
+			return programName + " development build (unknown exact version)"
 		}
 		return fmt.Sprintf("%s %s", programName, version)
 	}
