@@ -10,10 +10,8 @@ jobs:
     name: "Lint Go"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
-      - uses: "actions/setup-go@v3"
-        with:
-          go-version: "^1.18"
+      - uses: "actions/checkout@v6"
+      - uses: "authzed/actions/setup-go@main"
       - uses: "authzed/actions/gofumpt@main"
       - uses: "authzed/actions/go-mod-tidy@main"
       - uses: "authzed/actions/go-generate@main"
@@ -23,7 +21,7 @@ jobs:
     name: "Lint YAML & Markdown"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v6"
       - uses: "authzed/actions/yaml-lint@main"
       - uses: "authzed/actions/markdown-lint@main"
 
@@ -39,16 +37,16 @@ jobs:
       matrix:
         language: ["go"]
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v6"
       - uses: "authzed/actions/codeql@main"
 
   trivy:
     name: "Analyze with Trivy"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v6"
       - name: "Run Trivy vulnerability scanner"
-        uses: "aquasecurity/trivy-action@master"
+        uses: "aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1" # For https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23
         with:
           scan-type: "fs"
           ignore-unfixed: true
@@ -56,6 +54,6 @@ jobs:
           output: "trivy-results.sarif"
           severity: "CRITICAL"
       - name: "Upload Trivy scan results to GitHub Security tab"
-        uses: "github/codeql-action/upload-sarif@v2"
+        uses: "github/codeql-action/upload-sarif@v4"
         with:
           sarif_file: "trivy-results.sarif"
