@@ -1,6 +1,7 @@
 package cobraproclimits
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
@@ -26,7 +27,11 @@ func SetMemLimitRunE(options ...memlimit.Option) cobrautil.CobraRunFunc {
 			logLevelMap[zLevel] = sLevel
 		}
 
-		logger := zerolog.DefaultContextLogger
+		noop := zerolog.Nop()
+		logger := &noop
+		if ctx := cmd.Context(); ctx != nil {
+			logger = zerolog.Ctx(ctx)
+		}
 
 		logLevel := logLevelMap[logger.GetLevel()]
 
@@ -53,12 +58,17 @@ func SetMemLimitRunE(options ...memlimit.Option) cobrautil.CobraRunFunc {
 // limits for the go process. It requests all of the available CPU quota.
 func SetProcLimitRunE() cobrautil.CobraRunFunc {
 	return func(cmd *cobra.Command, args []string) error {
-		logger := zerolog.DefaultContextLogger
-
-		_, err := maxprocs.Set(maxprocs.Logger(zerolog.DefaultContextLogger.Printf))
-		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to set maxprocs")
+		noop := zerolog.Nop()
+		logger := &noop
+		if ctx := cmd.Context(); ctx != nil {
+			logger = zerolog.Ctx(ctx)
 		}
+
+		_, err := maxprocs.Set(maxprocs.Logger(logger.Printf))
+		if err != nil {
+			return fmt.Errorf("failed to set maxprocs: %w", err)
+		}
+
 		return nil
 	}
 }
