@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/jzelinskie/cobrautil/v2"
-	"github.com/jzelinskie/stringz"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/contrib/propagators/b3"
@@ -30,14 +29,17 @@ type Option func(*Builder)
 
 // New creates a Cobra RunFunc Builder for OpenTelemetry.
 func New(serviceName string, opts ...Option) *Builder {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok && serviceName == "" {
-		panic("no service name provided and failed to read from debug info")
+	if serviceName == "" {
+		bi, ok := debug.ReadBuildInfo()
+		if !ok {
+			panic("no service name provided and failed to read from debug info")
+		}
+		serviceName = bi.Main.Path
 	}
 
 	b := &Builder{
 		flagPrefix:  "otel",
-		serviceName: stringz.DefaultEmpty(serviceName, bi.Main.Path),
+		serviceName: serviceName,
 		preRunLevel: 0,
 		logger:      logr.Discard(),
 	}
