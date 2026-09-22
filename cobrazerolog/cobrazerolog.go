@@ -1,4 +1,4 @@
-// Package cobrahttp implements a builder for registering flags and producing
+// Package cobrazerolog implements a builder for registering flags and producing
 // a Cobra RunFunc that configures Zerolog.
 package cobrazerolog
 
@@ -41,6 +41,7 @@ type Builder struct {
 	async             bool
 	asyncSize         int
 	asyncPollInterval time.Duration
+	asyncCloser       io.Closer
 	preRunLevel       zerolog.Level
 }
 
@@ -94,13 +95,23 @@ func (b *Builder) RunE() cobrautil.CobraRunFunc {
 		if format == "console" || format == "auto" && isatty.IsTerminal(os.Stdout.Fd()) {
 			output = zerolog.ConsoleWriter{Out: os.Stderr}
 		} else {
-			output = os.Stderr
+			// Wrap os.Stderr so diode.Writer.Close() won't close the
+			// underlying file descriptor. diode closes the wrapped writer
+			// if it implements io.Closer, and *os.File does.
+			output = writerOnly{os.Stderr}
 		}
 
 		if b.async {
-			output = diode.NewWriter(output, 1000, 10*time.Millisecond, func(missed int) {
+			// Close any previous writer from a prior RunE() call to avoid
+			// leaking the poll goroutine.
+			if b.asyncCloser != nil {
+				_ = b.asyncCloser.Close()
+			}
+			w := diode.NewWriter(output, b.asyncSize, b.asyncPollInterval, func(missed int) {
 				fmt.Printf("Logger Dropped %d messages", missed)
 			})
+			output = w
+			b.asyncCloser = w
 		}
 
 		l := zerolog.New(output).With().Timestamp().Logger()
@@ -155,15 +166,36 @@ func WithPreRunLevel(preRunLevel zerolog.Level) Option {
 
 // WithAsync enables non-blocking logging.
 //
-// Size of the buffer and polling interval can be configured.
+// Size is the number of log entries buffered before dropping; must be > 0.
+// PollInterval is how often the buffer is flushed to the underlying writer.
 // Disabled by default.
 func WithAsync(size int, pollInterval time.Duration) Option {
 	return func(b *Builder) {
 		b.async = true
 		b.asyncSize = size
+		if b.asyncSize <= 0 {
+			b.asyncSize = 1000
+		}
 		b.asyncPollInterval = pollInterval
 	}
 }
+
+// Close flushes and closes the async log writer, if one was created.
+// This is a no-op if async logging is not enabled.
+// Should be called during process shutdown to avoid losing buffered log messages.
+func (b *Builder) Close() error {
+	if b.asyncCloser == nil {
+		return nil
+	}
+	closer := b.asyncCloser
+	b.asyncCloser = nil
+	return closer.Close()
+}
+
+// writerOnly wraps an io.Writer to hide any io.Closer implementation.
+// This prevents diode.Writer.Close() from closing the underlying writer
+// (e.g. os.Stderr) which the caller does not own.
+type writerOnly struct{ io.Writer }
 
 // WithTarget callback that forwards the configured logger.
 // Useful when we want to keep it in a global variable.
