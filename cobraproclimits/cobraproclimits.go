@@ -41,7 +41,7 @@ func SetMemLimitRunE(options ...memlimit.Option) cobrautil.CobraRunFunc {
 			),
 			memlimit.WithLogger(slogger),
 		}
-		_, _ = memlimit.SetGoMemLimitWithOpts(
+		_, _ = memlimit.Set(
 			append(defaults, options...)...,
 		)
 
